@@ -20,7 +20,7 @@ import { InstallPWA } from './components/InstallPWA';
 import { ListTodo, CheckCircle2, Clock, AlertCircle } from 'lucide-react';
 import { TaskCategories } from './components/task/TaskCategories';
 import { isOverdue } from './utils/dateUtils';
-import type { NavPage } from './types';
+import type { NavPage } from './types/navigation';
 import type { TaskCategory } from './types';
 
 type StatFilter = 'all' | 'overdue' | 'in-progress' | 'completed';
@@ -108,7 +108,7 @@ export default function App() {
     total: tasks.length,
     inProgress: tasks.filter(t => t.status === 'in-progress').length,
     completed: tasks.filter(t => t.status === 'completed').length,
-    overdue: tasks.filter(t => isOverdue(t.dueDate) && task.status !== 'completed').length
+    overdue: tasks.filter(t => isOverdue(t.dueDate) && t.status !== 'completed').length
   };
 
   const categoryCounts = tasks.reduce((acc, task) => {
@@ -285,6 +285,7 @@ export default function App() {
           avatar: user.avatar
         }}
         taskStats={taskStats}
+        tasks={tasks}
       />
       
       {showNotifications && (

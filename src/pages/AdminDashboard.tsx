@@ -10,6 +10,7 @@ import { CourseManager } from '../components/admin/course/CourseManager';
 import { StudyMaterialManager } from '../components/admin/study-materials/StudyMaterialManager';
 import { RoutineManager } from '../components/admin/routine/RoutineManager';
 import { TeacherManager } from '../components/admin/teacher/TeacherManager';
+import { Dashboard } from '../components/admin/dashboard/Dashboard';
 import { useAnnouncements } from '../hooks/useAnnouncements';
 import { useCourses } from '../hooks/useCourses';
 import { useRoutines } from '../hooks/useRoutines';
@@ -36,7 +37,7 @@ export function AdminDashboard({
   onDeleteTask,
   onUpdateTask,
 }: AdminDashboardProps) {
-  const [activeTab, setActiveTab] = useState<AdminTab>('users');
+  const [activeTab, setActiveTab] = useState<AdminTab>('dashboard');
   const { 
     announcements,
     createAnnouncement,
@@ -94,6 +95,7 @@ export function AdminDashboard({
         <div className="max-w-7xl mx-auto pt-12 lg:pt-0">
           <div className="mb-8">
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+              {activeTab === 'dashboard' && 'Dashboard'}
               {activeTab === 'users' && 'User Management'}
               {activeTab === 'tasks' && 'Task Management'}
               {activeTab === 'admin-tasks' && 'Admin Tasks'}
@@ -104,6 +106,10 @@ export function AdminDashboard({
               {activeTab === 'routine' && 'Routine Management'}
             </h1>
           </div>
+
+          {activeTab === 'dashboard' && (
+            <Dashboard users={users} tasks={tasks} />
+          )}
 
           {activeTab === 'users' && (
             <>

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { 
   Users, ListTodo, Settings, LogOut, Megaphone, Moon, Sun,
-  Book, GraduationCap, FileText, CalendarDays, User
+  Book, GraduationCap, FileText, CalendarDays, User, LayoutDashboard
 } from 'lucide-react';
 import { SideNavLink } from './SideNavLink';
 import { MobileMenuButton } from './MobileMenuButton';
@@ -19,6 +19,7 @@ export function SideNavigation({ activeTab, onTabChange, onLogout }: SideNavigat
   const { isDark, toggle } = useTheme();
 
   const navItems = [
+    { id: 'dashboard' as const, label: 'Dashboard', icon: LayoutDashboard },
     { id: 'users' as const, label: 'Users', icon: Users },
     { id: 'tasks' as const, label: 'Tasks', icon: ListTodo },
     { id: 'admin-tasks' as const, label: 'Admin Tasks', icon: Settings },

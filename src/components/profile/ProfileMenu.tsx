@@ -50,10 +50,10 @@ export function ProfileMenu({ onLogout }: ProfileMenuProps) {
     <div className="relative">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="group flex items-center gap-2 p-2 rounded-xl hover:bg-white/80 transition-all duration-200"
+        className="p-1.5 rounded-lg bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 dark:focus-visible:ring-blue-400/50"
         aria-label="Open profile menu"
       >
-        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-blue-500/20 group-hover:shadow-blue-500/30 transition-all duration-300">
+        <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-sm font-medium shadow-sm">
           {userInitial}
         </div>
       </button>
@@ -64,17 +64,17 @@ export function ProfileMenu({ onLogout }: ProfileMenuProps) {
             className="fixed inset-0 z-10"
             onClick={() => setIsOpen(false)}
           />
-          <div className="absolute right-0 mt-2 w-72 bg-white rounded-2xl shadow-xl ring-1 ring-black/5 z-20 animate-scale-in origin-top-right divide-y divide-gray-100">
+          <div className="absolute right-0 mt-2 w-72 bg-white dark:bg-gray-800 rounded-xl shadow-xl ring-1 ring-black/5 dark:ring-white/5 z-20 animate-scale-in origin-top-right divide-y divide-gray-100 dark:divide-gray-700">
             {/* Profile Section */}
             <div className="p-4">
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white shadow-lg text-xl font-semibold">
+                <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white shadow-md text-xl font-semibold">
                   {userInitial}
                 </div>
                 <div>
-                  <h3 className="font-medium text-gray-900">{user?.name}</h3>
-                  <p className="text-sm text-gray-500">{user?.email}</p>
-                  <span className="inline-block mt-1 px-2 py-0.5 text-xs font-medium rounded-full bg-blue-50 text-blue-700">
+                  <h3 className="font-medium text-gray-900 dark:text-white">{user?.name}</h3>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">{user?.email}</p>
+                  <span className="inline-block mt-1 px-2 py-0.5 text-xs font-medium rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400">
                     {user?.role}
                   </span>
                 </div>
@@ -87,18 +87,18 @@ export function ProfileMenu({ onLogout }: ProfileMenuProps) {
                 <button
                   key={item.id}
                   onClick={item.onClick}
-                  className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 transition-colors group"
+                  className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors group"
                 >
-                  <div className="p-2 rounded-lg bg-gray-50 text-gray-600 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
+                  <div className="p-2 rounded-lg bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-400 group-hover:bg-blue-50 dark:group-hover:bg-blue-900/20 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
                     <item.icon className="w-4 h-4" />
                   </div>
                   <div className="flex-grow text-left">
-                    <div className="font-medium text-gray-900 group-hover:text-blue-600 transition-colors">
+                    <div className="font-medium text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
                       {item.label}
                     </div>
-                    <div className="text-xs text-gray-500">{item.description}</div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">{item.description}</div>
                   </div>
-                  <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-blue-600 transition-colors" />
+                  <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors" />
                 </button>
               ))}
             </div>
@@ -110,14 +110,14 @@ export function ProfileMenu({ onLogout }: ProfileMenuProps) {
                   setIsOpen(false);
                   onLogout();
                 }}
-                className="w-full flex items-center gap-3 p-3 text-red-600 hover:bg-red-50 rounded-xl transition-colors group"
+                className="w-full flex items-center gap-3 p-3 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors group"
               >
-                <div className="p-2 rounded-lg bg-red-50 text-red-600 group-hover:bg-red-100 transition-colors">
+                <div className="p-2 rounded-lg bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 group-hover:bg-red-100 dark:group-hover:bg-red-900/50 transition-colors">
                   <LogOut className="w-4 h-4" />
                 </div>
                 <div className="flex-grow text-left">
                   <div className="font-medium">Logout</div>
-                  <div className="text-xs text-red-500">End your session</div>
+                  <div className="text-xs text-red-500 dark:text-red-400/80">End your session</div>
                 </div>
               </button>
             </div>

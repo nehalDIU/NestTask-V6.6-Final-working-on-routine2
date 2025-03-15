@@ -3,37 +3,110 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>NestTask - Offline</title>
+  <title>NestTask - Offline Mode</title>
   <style>
+    :root {
+      --primary-color: #0284c7;
+      --primary-dark: #0369a1;
+      --accent-color: #3b82f6;
+      --text-color: #333;
+      --light-text: #64748b;
+      --background: #f8fafc;
+      --card-bg: white;
+      --border-color: #e2e8f0;
+    }
+    
     body {
       margin: 0;
       padding: 0;
       font-family: system-ui, -apple-system, sans-serif;
-      background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+      background: var(--background);
       min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      color: var(--text-color);
+    }
+    
+    header {
+      background: var(--primary-color);
+      color: white;
+      padding: 1rem;
+      text-align: center;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    }
+    
+    main {
+      flex: 1;
       display: flex;
       align-items: center;
       justify-content: center;
+      padding: 2rem;
     }
+    
     .container {
       text-align: center;
-      padding: 2rem;
-      background: white;
+      background: var(--card-bg);
       border-radius: 1rem;
       box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
       max-width: 90%;
-      width: 400px;
+      width: 600px;
+      padding: 2rem;
     }
+    
     h1 {
-      color: #0284c7;
+      color: var(--primary-color);
       margin-bottom: 1rem;
     }
-    p {
-      color: #64748b;
-      margin-bottom: 2rem;
+    
+    h2 {
+      color: var(--accent-color);
+      margin-bottom: 0.5rem;
+      font-size: 1.2rem;
     }
+    
+    p {
+      color: var(--light-text);
+      margin-bottom: 2rem;
+      line-height: 1.6;
+    }
+    
+    .card {
+      background: var(--background);
+      border: 1px solid var(--border-color);
+      border-radius: 0.75rem;
+      padding: 1.5rem;
+      margin: 1rem 0;
+      text-align: left;
+    }
+    
+    .info-list {
+      list-style-type: none;
+      padding: 0;
+      margin: 1.5rem 0;
+    }
+    
+    .info-list li {
+      padding: 0.75rem 0;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+    }
+    
+    .info-list li:last-child {
+      border-bottom: none;
+    }
+    
+    .info-list li:before {
+      content: "•";
+      color: var(--accent-color);
+      font-weight: bold;
+      display: inline-block;
+      width: 1.5rem;
+      margin-left: -1rem;
+    }
+    
     button {
-      background: #0284c7;
+      background: var(--primary-color);
       color: white;
       border: none;
       padding: 0.75rem 1.5rem;
@@ -41,17 +114,57 @@
       cursor: pointer;
       font-weight: 500;
       transition: background-color 0.2s;
+      margin-top: 1rem;
     }
+    
     button:hover {
-      background: #0369a1;
+      background: var(--primary-dark);
+    }
+    
+    .offline-icon {
+      width: 80px;
+      height: 80px;
+      margin-bottom: 1rem;
+      color: var(--primary-color);
+      margin: 0 auto 1.5rem;
+    }
+    
+    .wifi-slash {
+      display: inline-block;
+      width: 80px;
+      height: 80px;
+      background: var(--primary-color);
+      mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M16.72 11.06A10.94 10.94 0 0 1 19 12.55'%3E%3C/path%3E%3Cpath d='M5 12.55a10.94 10.94 0 0 1 5.17-2.39'%3E%3C/path%3E%3Cpath d='M10.71 5.05A16 16 0 0 1 22.58 9'%3E%3C/path%3E%3Cpath d='M1.42 9a15.91 15.91 0 0 1 4.7-2.88'%3E%3C/path%3E%3Cpath d='M8.53 16.11a6 6 0 0 1 6.95 0'%3E%3C/path%3E%3Cline x1='2' y1='2' x2='22' y2='22'%3E%3C/line%3E%3C/svg%3E") no-repeat center center;
+      -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M16.72 11.06A10.94 10.94 0 0 1 19 12.55'%3E%3C/path%3E%3Cpath d='M5 12.55a10.94 10.94 0 0 1 5.17-2.39'%3E%3C/path%3E%3Cpath d='M10.71 5.05A16 16 0 0 1 22.58 9'%3E%3C/path%3E%3Cpath d='M1.42 9a15.91 15.91 0 0 1 4.7-2.88'%3E%3C/path%3E%3Cpath d='M8.53 16.11a6 6 0 0 1 6.95 0'%3E%3C/path%3E%3Cline x1='2' y1='2' x2='22' y2='22'%3E%3C/line%3E%3C/svg%3E") no-repeat center center;
+      mask-size: cover;
+      -webkit-mask-size: cover;
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <h1>You're Offline</h1>
-    <p>Please check your internet connection and try again.</p>
-    <button onclick="window.location.reload()">Retry Connection</button>
-  </div>
+  <header>
+    <h1>NestTask</h1>
+  </header>
+  
+  <main>
+    <div class="container">
+      <div class="wifi-slash"></div>
+      <h1>You're Offline</h1>
+      <p>Don't worry! NestTask can still work in offline mode. Your recent tasks are available, and any changes you make will sync when you're back online.</p>
+      
+      <div class="card">
+        <h2>What you can do offline:</h2>
+        <ul class="info-list">
+          <li>View your recent tasks that were loaded before going offline</li>
+          <li>Create new tasks (they will sync when you reconnect)</li>
+          <li>Update existing tasks (changes will be saved locally)</li>
+          <li>Mark tasks as complete</li>
+        </ul>
+      </div>
+      
+      <button onclick="window.location.reload()">Check Connection</button>
+      <p>Or try going back to <a href="/">Home</a></p>
+    </div>
+  </main>
 </body>
 </html>

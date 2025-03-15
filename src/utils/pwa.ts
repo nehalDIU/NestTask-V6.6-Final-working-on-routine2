@@ -1,12 +1,8 @@
 // Check if the app can be installed
 export function checkInstallability() {
-  if ('BeforeInstallPromptEvent' in window) {
-    window.addEventListener('beforeinstallprompt', (e) => {
-      e.preventDefault();
-      // Store the event for later use
-      (window as any).deferredPrompt = e;
-    });
-  }
+  // We no longer need to handle this event here since InstallPWA.tsx handles it
+  // This function now just exists for backwards compatibility
+  console.log('PWA installability is now handled by InstallPWA component');
 }
 
 // Request to install the PWA

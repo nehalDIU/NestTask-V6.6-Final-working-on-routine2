@@ -1,77 +1,203 @@
-const CACHE_NAME = 'nesttask-v1';
-const OFFLINE_URL = '/offline.html';
+// Import Workbox from CDN (this makes the service worker self-contained)
+importScripts('https://storage.googleapis.com/workbox-cdn/releases/7.0.0/workbox-sw.js');
 
-const STATIC_ASSETS = [
-  '/',
-  '/index.html',
-  '/offline.html',
-  '/manifest.json',
-  '/icons/icon-192x192.png',
-  '/icons/icon-512x512.png',
-  '/icons/add-task.png',
-  '/icons/view-tasks.png'
-];
-
-// Install event - cache static assets
-self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(STATIC_ASSETS);
+// Workbox configuration
+if (workbox) {
+  console.log('Workbox is loaded 🎉');
+  
+  // Custom precache manifest
+  workbox.precaching.precacheAndRoute([
+    { url: '/', revision: 'v1' },
+    { url: '/index.html', revision: 'v1' },
+    { url: '/offline.html', revision: 'v1' },
+    { url: '/manifest.json', revision: 'v1' },
+    { url: '/icons/icon-192x192.png', revision: 'v1' },
+    { url: '/icons/icon-512x512.png', revision: 'v1' },
+    { url: '/icons/add-task.png', revision: 'v1' },
+    { url: '/icons/view-tasks.png', revision: 'v1' }
+  ]);
+  
+  // Helper function to check for unsupported schemes
+  const isValidUrl = (url) => {
+    const invalidSchemes = ['chrome-extension:', 'about:', 'data:'];
+    return !invalidSchemes.some(scheme => url.startsWith(scheme));
+  };
+  
+  // Cache CSS, JS, and Web Fonts with a stale-while-revalidate strategy
+  workbox.routing.registerRoute(
+    ({ request, url }) => 
+      (request.destination === 'style' || 
+       request.destination === 'script' || 
+       request.destination === 'font') && 
+      isValidUrl(url.href),
+    new workbox.strategies.StaleWhileRevalidate({
+      cacheName: 'static-resources',
+      plugins: [
+        new workbox.expiration.ExpirationPlugin({
+          maxEntries: 60,
+          maxAgeSeconds: 30 * 24 * 60 * 60, // 30 days
+        }),
+      ],
     })
   );
-  self.skipWaiting();
-});
-
-// Activate event - clean up old caches
-self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames
-          .filter((cacheName) => cacheName !== CACHE_NAME)
-          .map((cacheName) => caches.delete(cacheName))
-      );
+  
+  // Cache images with a cache-first strategy
+  workbox.routing.registerRoute(
+    ({ request, url }) => 
+      request.destination === 'image' && 
+      isValidUrl(url.href),
+    new workbox.strategies.CacheFirst({
+      cacheName: 'images',
+      plugins: [
+        new workbox.expiration.ExpirationPlugin({
+          maxEntries: 60,
+          maxAgeSeconds: 30 * 24 * 60 * 60, // 30 days
+        }),
+      ],
     })
   );
-  self.clients.claim();
-});
+  
+  // Special handling for API requests
+  workbox.routing.registerRoute(
+    ({ url }) => url.pathname.startsWith('/api') && isValidUrl(url.href),
+    new workbox.strategies.NetworkFirst({
+      cacheName: 'api-responses',
+      plugins: [
+        new workbox.expiration.ExpirationPlugin({
+          maxEntries: 50,
+          maxAgeSeconds: 24 * 60 * 60, // 1 day
+        }),
+      ],
+    })
+  );
+  
+  // Fallback to offline page for navigation requests that fail
+  workbox.routing.setCatchHandler(({ event }) => {
+    if (event.request.destination === 'document') {
+      return caches.match('/offline.html');
+    }
+    return Response.error();
+  });
+  
+} else {
+  console.log('Workbox failed to load 😢');
+}
 
-// Fetch event - network first, fallback to cache
-self.addEventListener('fetch', (event) => {
-  // Handle non-GET requests
-  if (event.request.method !== 'GET') return;
-
-  // Handle Supabase API requests differently
-  if (event.request.url.includes('supabase.co')) {
+// Network state change detection
+self.addEventListener('fetch', event => {
+  // Skip non-http/https URLs (like chrome-extension://)
+  if (!event.request.url.startsWith('http')) {
     return;
   }
-
-  event.respondWith(
-    fetch(event.request)
-      .then((response) => {
-        // Cache successful responses
-        if (response.ok) {
-          const responseClone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, responseClone);
+  
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request)
+        .then(response => {
+          // Connection is back - broadcast a message
+          self.clients.matchAll().then(clients => {
+            clients.forEach(client => {
+              client.postMessage({
+                type: 'ONLINE_STATUS_CHANGE',
+                payload: { status: 'online' }
+              });
+            });
           });
-        }
-        return response;
-      })
-      .catch(async () => {
-        // Try to get from cache
-        const cachedResponse = await caches.match(event.request);
-        if (cachedResponse) return cachedResponse;
-
-        // Return offline page for navigation requests
-        if (event.request.mode === 'navigate') {
-          return caches.match(OFFLINE_URL);
-        }
-
-        return new Response('Network error', { status: 408 });
-      })
-  );
+          return response;
+        })
+        .catch(() => {
+          // Network is down - broadcast a message
+          self.clients.matchAll().then(clients => {
+            clients.forEach(client => {
+              client.postMessage({
+                type: 'ONLINE_STATUS_CHANGE',
+                payload: { status: 'offline' }
+              });
+            });
+          });
+          
+          return caches.match('/offline.html');
+        })
+    );
+  }
 });
+
+// Background sync for deferred operations
+self.addEventListener('sync', event => {
+  if (event.tag === 'sync-tasks') {
+    event.waitUntil(syncTasks());
+  }
+});
+
+async function syncTasks() {
+  try {
+    // Get pending tasks from IndexedDB
+    const db = await openTasksDB();
+    const pendingTasks = await getAllPendingTasks(db);
+    
+    // Process each pending task
+    for (const task of pendingTasks) {
+      try {
+        // Send to server
+        const response = await fetch('/api/tasks', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(task.data)
+        });
+        
+        if (response.ok) {
+          // Remove from pending queue
+          await removePendingTask(db, task.id);
+        }
+      } catch (error) {
+        console.error('Failed to sync task:', error);
+      }
+    }
+  } catch (error) {
+    console.error('Error in syncTasks:', error);
+  }
+}
+
+// IndexedDB helper functions
+async function openTasksDB() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open('tasks-store', 1);
+    
+    request.onupgradeneeded = event => {
+      const db = event.target.result;
+      if (!db.objectStoreNames.contains('pending-tasks')) {
+        db.createObjectStore('pending-tasks', { keyPath: 'id' });
+      }
+    };
+    
+    request.onsuccess = event => resolve(event.target.result);
+    request.onerror = event => reject(event.target.error);
+  });
+}
+
+async function getAllPendingTasks(db) {
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(['pending-tasks'], 'readonly');
+    const store = transaction.objectStore('pending-tasks');
+    const request = store.getAll();
+    
+    request.onsuccess = event => resolve(event.target.result);
+    request.onerror = event => reject(event.target.error);
+  });
+}
+
+async function removePendingTask(db, id) {
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(['pending-tasks'], 'readwrite');
+    const store = transaction.objectStore('pending-tasks');
+    const request = store.delete(id);
+    
+    request.onsuccess = event => resolve(event.target.result);
+    request.onerror = event => reject(event.target.error);
+  });
+}
 
 // Push notification handler
 self.addEventListener('push', (event) => {

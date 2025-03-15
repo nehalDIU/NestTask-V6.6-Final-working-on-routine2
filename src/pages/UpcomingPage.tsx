@@ -20,6 +20,8 @@ export function UpcomingPage() {
   const [isUpdating, setIsUpdating] = useState(false);
   const [operationError, setOperationError] = useState<string | null>(null);
   const [isMonthlyCalendarOpen, setIsMonthlyCalendarOpen] = useState(false);
+  // Flag to prevent auto-selection of tasks after date change
+  const [preventTaskSelection, setPreventTaskSelection] = useState(false);
 
   // Create a reusable optimized date formatter
   const formatDate = (date: Date): string => {
@@ -70,10 +72,28 @@ export function UpcomingPage() {
       }
     };
     
+    // Listen for preventAutoTaskSelect event - this ensures no task is auto-selected
+    const handlePreventAutoSelectEvent = (e: CustomEvent<{date: Date}>) => {
+      // Clear any selected task when a date is selected from the calendar
+      setSelectedTask(null);
+      // Set the flag to prevent task selection for a brief period
+      setPreventTaskSelection(true);
+      // Reset the flag after a delay
+      setTimeout(() => {
+        setPreventTaskSelection(false);
+      }, 1000); // Prevent selection for 1 second
+      
+      if (process.env.NODE_ENV === 'development') {
+        console.log('UpcomingPage: Preventing auto task selection');
+      }
+    };
+    
     window.addEventListener('dateSelected', handleDateSelectedEvent as EventListener);
+    window.addEventListener('preventAutoTaskSelect', handlePreventAutoSelectEvent as EventListener);
     
     return () => {
       window.removeEventListener('dateSelected', handleDateSelectedEvent as EventListener);
+      window.removeEventListener('preventAutoTaskSelect', handlePreventAutoSelectEvent as EventListener);
     };
   }, []);
 
@@ -425,15 +445,20 @@ export function UpcomingPage() {
               return (
                 <div
                   key={task.id}
-                  onClick={() => setSelectedTask(task)}
+                  onClick={() => {
+                    // Only allow task selection if not prevented
+                    if (!preventTaskSelection) {
+                      setSelectedTask(task);
+                    }
+                  }}
                   className={`
                     group h-full bg-white dark:bg-gray-800/90 rounded-lg
                     shadow-sm hover:shadow-lg
                     border border-gray-100 dark:border-gray-700/50
                     hover:border-blue-200 dark:hover:border-blue-600/50
-                    relative overflow-hidden cursor-pointer
+                    relative overflow-hidden ${preventTaskSelection ? '' : 'cursor-pointer'}
                     transition-all duration-200
-                    transform hover:-translate-y-1
+                    transform ${preventTaskSelection ? '' : 'hover:-translate-y-1'}
                     flex flex-col
                     ${task.status === 'completed' 
                       ? 'opacity-80 hover:opacity-95' 
@@ -596,6 +621,16 @@ export function UpcomingPage() {
             console.error('Invalid date received from calendar:', date);
             return;
           }
+          
+          // Clear any selected task to prevent auto-selection
+          setSelectedTask(null);
+          
+          // Set the flag to prevent task selection for a brief period
+          setPreventTaskSelection(true);
+          // Reset the flag after a delay
+          setTimeout(() => {
+            setPreventTaskSelection(false);
+          }, 1000); // Prevent selection for 1 second
           
           setSelectedDate(date);
           setIsMonthlyCalendarOpen(false);

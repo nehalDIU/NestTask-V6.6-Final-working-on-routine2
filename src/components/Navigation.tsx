@@ -49,7 +49,28 @@ export function Navigation({
 
   const handleDateSelect = (date: Date) => {
     setSelectedDate(date);
-    // You can add additional logic here if needed when a date is selected
+    setIsCalendarOpen(false);
+    onPageChange('upcoming');
+    
+    try {
+      // Optimize date formatting - direct string extraction is faster than string padding
+      const year = date.getFullYear();
+      const month = date.getMonth() + 1;
+      const day = date.getDate();
+      
+      // Format with ternary operators for better performance
+      const formattedDate = `${year}-${month < 10 ? '0' + month : month}-${day < 10 ? '0' + day : day}`;
+      
+      // Use URLSearchParams constructor directly with an object for better performance
+      const params = new URLSearchParams(window.location.search);
+      params.set('selectedDate', formattedDate);
+      
+      // Update URL efficiently
+      const newUrl = `${window.location.pathname}?${params.toString()}`;
+      window.history.pushState({ path: newUrl }, '', newUrl);
+    } catch (error) {
+      console.error('Error setting date parameter:', error);
+    }
   };
 
   return (

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from './hooks/useAuth';
 import { useTasks } from './hooks/useTasks';
 import { useUsers } from './hooks/useUsers';
@@ -19,7 +19,7 @@ import { LoadingScreen } from './components/LoadingScreen';
 import { InstallPWA } from './components/InstallPWA';
 import { ListTodo, CheckCircle2, Clock, AlertCircle } from 'lucide-react';
 import { TaskCategories } from './components/task/TaskCategories';
-import { isOverdue } from './utils/dateUtils';
+import { isOverdue, isSameDay } from './utils/dateUtils';
 import type { NavPage } from './types/navigation';
 import type { TaskCategory } from './types';
 
@@ -53,6 +53,30 @@ export default function App() {
   }, []);
 
   const hasUnreadNotifications = unreadCount > 0;
+
+  // Calculate today's task count
+  const todayTaskCount = useMemo(() => {
+    if (!tasks || tasks.length === 0) return 0;
+    
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Normalize today to start of day
+    
+    return tasks.filter(task => {
+      // Skip tasks with invalid dates
+      if (!task.dueDate) return false;
+      
+      try {
+        const taskDate = new Date(task.dueDate);
+        taskDate.setHours(0, 0, 0, 0); // Normalize task date to start of day
+        
+        // Only count non-completed tasks due today
+        return isSameDay(taskDate, today) && task.status !== 'completed';
+      } catch (e) {
+        // Skip tasks with invalid date format
+        return false;
+      }
+    }).length;
+  }, [tasks]);
 
   if (isLoading || authLoading || (user?.role === 'admin' && usersLoading)) {
     return <LoadingScreen />;
@@ -310,6 +334,7 @@ export default function App() {
         activePage={activePage}
         onPageChange={setActivePage}
         hasUnreadNotifications={hasUnreadNotifications}
+        todayTaskCount={todayTaskCount}
       />
 
       <InstallPWA />

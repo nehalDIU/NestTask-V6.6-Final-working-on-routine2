@@ -6,6 +6,7 @@ interface BottomNavigationProps {
   activePage: NavPage;
   onPageChange: (page: NavPage) => void;
   hasUnreadNotifications: boolean;
+  todayTaskCount?: number;
 }
 
 const BottomNavigationItem = React.memo(({ 
@@ -67,7 +68,7 @@ const BottomNavigationItem = React.memo(({
 
 BottomNavigationItem.displayName = 'BottomNavigationItem';
 
-export function BottomNavigation({ activePage, onPageChange, hasUnreadNotifications }: BottomNavigationProps) {
+export function BottomNavigation({ activePage, onPageChange, hasUnreadNotifications, todayTaskCount = 0 }: BottomNavigationProps) {
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
   
@@ -131,10 +132,10 @@ export function BottomNavigation({ activePage, onPageChange, hasUnreadNotificati
 
   const navItems = useMemo(() => [
     { id: 'home' as NavPage, icon: Home, label: 'Home', ariaLabel: 'Go to home page', badge: undefined },
-    { id: 'upcoming' as NavPage, icon: Calendar, label: 'Upcoming', ariaLabel: 'View upcoming tasks', badge: hasUnreadNotifications ? 1 : undefined },
+    { id: 'upcoming' as NavPage, icon: Calendar, label: 'Upcoming', ariaLabel: 'View upcoming tasks', badge: todayTaskCount > 0 ? todayTaskCount : undefined },
     { id: 'routine' as NavPage, icon: BookOpen, label: 'Routine', ariaLabel: 'View your routine', badge: undefined },
     { id: 'search' as NavPage, icon: Search, label: 'Search', ariaLabel: 'Search content', badge: undefined }
-  ], [hasUnreadNotifications]);
+  ], [todayTaskCount]);
 
   const activeIndex = navItems.findIndex(item => item.id === activePage);
 

@@ -92,6 +92,8 @@ export function RoutinePage() {
         slot.teacher?.name?.toLowerCase().includes(searchTerm.toLowerCase());
       
       const matchesSection = !selectedSection || slot.section === selectedSection;
+      
+      // Show only slots for the exactly selected day
       const matchesDay = format(selectedDate, 'EEEE') === slot.dayOfWeek;
       
       return matchesSearch && matchesSection && matchesDay;

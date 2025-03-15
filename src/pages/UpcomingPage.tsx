@@ -58,6 +58,23 @@ export function UpcomingPage() {
     } catch (error) {
       console.error('Error parsing date from URL:', error);
     }
+    
+    // Listen for dateSelected events from Navigation component
+    const handleDateSelectedEvent = (e: CustomEvent<{date: Date}>) => {
+      const newDate = e.detail.date;
+      if (newDate && !isNaN(newDate.getTime())) {
+        setSelectedDate(newDate);
+        if (process.env.NODE_ENV === 'development') {
+          console.log('UpcomingPage: Received dateSelected event', newDate);
+        }
+      }
+    };
+    
+    window.addEventListener('dateSelected', handleDateSelectedEvent as EventListener);
+    
+    return () => {
+      window.removeEventListener('dateSelected', handleDateSelectedEvent as EventListener);
+    };
   }, []);
 
   // Update local tasks when allTasks changes

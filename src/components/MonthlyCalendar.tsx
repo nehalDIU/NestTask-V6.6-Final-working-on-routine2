@@ -28,11 +28,9 @@ interface CalendarDay {
 
 export function MonthlyCalendar({ isOpen, onClose, selectedDate, onSelectDate, tasks }: MonthlyCalendarProps) {
   const [currentMonth, setCurrentMonth] = useState(selectedDate);
-  const [hoveredDate, setHoveredDate] = useState<Date | null>(null);
   const [focusedDateIndex, setFocusedDateIndex] = useState<number | null>(null);
   const [showYearSelector, setShowYearSelector] = useState(false);
   const [viewMode, setViewMode] = useState<'calendar' | 'year'>('calendar');
-  const tooltipTimeoutRef = useRef<NodeJS.Timeout>();
   const calendarRef = useRef<HTMLDivElement>(null);
   const dayButtonsRef = useRef<(HTMLButtonElement | null)[]>([]);
   const isMobileRef = useRef(false);
@@ -93,11 +91,6 @@ export function MonthlyCalendar({ isOpen, onClose, selectedDate, onSelectDate, t
     // Cleanup function
     return () => {
       window.removeEventListener('resize', handleResize);
-      
-      // Clear any pending timeouts
-      if (tooltipTimeoutRef.current) {
-        clearTimeout(tooltipTimeoutRef.current);
-      }
       
       // Reset refs
       touchStartXRef.current = null;
@@ -203,24 +196,6 @@ export function MonthlyCalendar({ isOpen, onClose, selectedDate, onSelectDate, t
     setViewMode(viewMode === 'calendar' ? 'year' : 'calendar');
   };
 
-  // Handle mouse enter with delay for tooltip
-  const handleMouseEnter = (date: Date) => {
-    if (tooltipTimeoutRef.current) {
-      clearTimeout(tooltipTimeoutRef.current);
-    }
-    tooltipTimeoutRef.current = setTimeout(() => {
-      setHoveredDate(date);
-    }, 400); // Show tooltip after 400ms hover (slightly faster for better UX)
-  };
-
-  // Handle mouse leave
-  const handleMouseLeave = () => {
-    if (tooltipTimeoutRef.current) {
-      clearTimeout(tooltipTimeoutRef.current);
-    }
-    setHoveredDate(null);
-  };
-
   // Update the touch handlers to accept correct parameters
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     // Save touch start coordinates for swipe detection
@@ -229,8 +204,7 @@ export function MonthlyCalendar({ isOpen, onClose, selectedDate, onSelectDate, t
   }, []);
 
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
-    // Clear hovered date during touch move
-    setHoveredDate(null);
+    // No need to handle any specific actions during touch move
   }, []);
 
   const handleTouchEnd = useCallback((e: React.TouchEvent) => {
@@ -282,8 +256,8 @@ export function MonthlyCalendar({ isOpen, onClose, selectedDate, onSelectDate, t
         // Pass the normalized date to ensure consistency
         onSelectDate(normalizedDate);
         
-        // Close calendar AFTER date selection with a slight delay
-        setTimeout(() => onClose(), 10);
+        // Close calendar after a short delay to ensure date selection is processed
+        setTimeout(() => onClose(), 50);
       }
     }
     
@@ -572,11 +546,11 @@ export function MonthlyCalendar({ isOpen, onClose, selectedDate, onSelectDate, t
                                   console.log(`Selected date clicked: ${formatDateString(selectedDate)}`);
                                 }
                                 
-                                // Ensure we're passing a valid date
+                                // Pass the date and ensure it's fully processed before closing
                                 onSelectDate(selectedDate);
                                 
-                                // Close calendar AFTER date selection
-                                setTimeout(() => onClose(), 10);
+                                // Close calendar after a short delay to ensure date selection is processed
+                                setTimeout(() => onClose(), 50);
                               } catch (error) {
                                 console.error('Error selecting date:', error);
                               }
@@ -584,8 +558,6 @@ export function MonthlyCalendar({ isOpen, onClose, selectedDate, onSelectDate, t
                             onTouchStart={(e) => handleTouchStart(e)}
                             onTouchMove={handleTouchMove}
                             onTouchEnd={(e) => handleDateTouchEnd(date, e)}
-                            onMouseEnter={() => handleMouseEnter(date)}
-                            onMouseLeave={handleMouseLeave}
                             onKeyDown={(e) => handleKeyDown(e, index)}
                             tabIndex={0}
                             aria-label={`${format(date, 'MMMM d, yyyy')}${
@@ -653,32 +625,8 @@ export function MonthlyCalendar({ isOpen, onClose, selectedDate, onSelectDate, t
                               </div>
                             )}
 
-                            {/* Tooltip showing task summary for hovered date - only for desktop */}
-                            {hoveredDate && 
-                             isSameDayOptimized(hoveredDate, date) && 
-                             !isMobileRef.current && (
-                              <motion.div
-                                className="absolute z-10 p-2 bg-gray-800 text-white rounded shadow-lg -mt-24 left-1/2 transform -translate-x-1/2"
-                                initial={{ opacity: 0, scale: 0.8 }}
-                                animate={{ opacity: 1, scale: 1 }}
-                                exit={{ opacity: 0, scale: 0.8 }}
-                                transition={{ duration: 0.2 }}
-                              >
-                                <p className="text-xs font-semibold mb-1">{format(date, 'MMMM d, yyyy')}</p>
-                                {summary.total > 0 ? (
-                                  <>
-                                    <p className="text-xs">Completed: {summary.completed}</p>
-                                    <p className="text-xs">Overdue: {summary.overdue}</p>
-                                    <p className="text-xs">Upcoming: {summary.inProgress}</p>
-                                  </>
-                                ) : (
-                                  <p className="text-xs">No tasks</p>
-                                )}
-                              </motion.div>
-                            )}
-                            
-                            {/* Task count indicator for mobile */}
-                            {isMobileRef.current && summary.total > 0 && (
+                            {/* Task count badge for days with tasks */}
+                            {summary.total > 0 && (
                               <div className="absolute -top-1 -right-1 min-w-[18px] h-[18px] rounded-full bg-blue-500 text-white text-[10px] flex items-center justify-center px-1 shadow-sm">
                                 {summary.total}
                               </div>
@@ -712,7 +660,7 @@ export function MonthlyCalendar({ isOpen, onClose, selectedDate, onSelectDate, t
             <div className="flex justify-between items-center p-4 border-t border-gray-200">
               <div>
                 {isMobileRef.current ? (
-                  <p className="text-sm text-gray-500">Tap date to view details</p>
+                  <p className="text-sm text-gray-500">Tap to select date</p>
                 ) : (
                   <p className="text-sm text-gray-500">Swipe to navigate</p>
                 )}

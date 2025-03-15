@@ -48,8 +48,11 @@ export function Navigation({
   };
 
   const handleDateSelect = (date: Date) => {
+    // Update local state
     setSelectedDate(date);
     setIsCalendarOpen(false);
+    
+    // Always navigate to upcoming page
     onPageChange('upcoming');
     
     try {
@@ -65,9 +68,18 @@ export function Navigation({
       const params = new URLSearchParams(window.location.search);
       params.set('selectedDate', formattedDate);
       
-      // Update URL efficiently
+      // Force URL update with correct date parameter
       const newUrl = `${window.location.pathname}?${params.toString()}`;
-      window.history.pushState({ path: newUrl }, '', newUrl);
+      window.history.replaceState({ path: newUrl, date: formattedDate }, '', newUrl);
+      
+      // Dispatch a custom event to notify other components
+      const dateSelectedEvent = new CustomEvent('dateSelected', { detail: { date } });
+      window.dispatchEvent(dateSelectedEvent);
+      
+      // For debugging in development
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Navigation: Selected date and updated URL', formattedDate);
+      }
     } catch (error) {
       console.error('Error setting date parameter:', error);
     }

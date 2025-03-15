@@ -19,7 +19,8 @@ import { LoadingScreen } from './components/LoadingScreen';
 import { InstallPWA } from './components/InstallPWA';
 import { OfflineIndicator } from './components/ui/OfflineIndicator';
 import { OfflineToast } from './components/ui/OfflineToast';
-import { ListTodo, CheckCircle2, Clock, AlertCircle } from 'lucide-react';
+import { OfflineBanner } from './components/ui/OfflineBanner';
+import { ListTodo, CheckCircle2, Clock, AlertCircle, WifiOff } from 'lucide-react';
 import { TaskCategories } from './components/task/TaskCategories';
 import { isOverdue, isSameDay } from './utils/dateUtils';
 import { useOfflineStatus } from './hooks/useOfflineStatus';
@@ -183,6 +184,10 @@ export default function App() {
       default:
         return (
           <div className="space-y-8">
+            {isOffline && (
+              <OfflineBanner message="You are currently offline. Showing cached tasks and data." />
+            )}
+            
             {/* Welcome Section */}
             <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-2xl p-6 sm:p-8 text-white">
               <h1 className="text-2xl sm:text-3xl font-bold mb-2">

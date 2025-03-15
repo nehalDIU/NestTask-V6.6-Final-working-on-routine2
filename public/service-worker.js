@@ -16,6 +16,14 @@ const STATIC_ASSETS = [
   '/src/index.css'
 ];
 
+// API routes to cache
+const API_ROUTES_TO_CACHE = [
+  /\/api\/tasks/,
+  /\/api\/routines/,
+  /\/api\/courses/,
+  /\/api\/teachers/
+];
+
 // Dynamic assets that should be cached during runtime
 const RUNTIME_CACHE_PATTERNS = [
   /\.(js|css)$/, // JS and CSS files
@@ -50,13 +58,13 @@ self.addEventListener('activate', (event) => {
 
 // Helper function to determine if a URL should be cached at runtime
 function shouldCacheAtRuntime(url) {
-  // Don't cache Supabase API requests
-  if (url.includes('supabase.co')) {
-    return false;
-  }
-  
   // Check if the URL matches any of our patterns
   return RUNTIME_CACHE_PATTERNS.some(pattern => pattern.test(url));
+}
+
+// Helper function to determine if a URL is an API route that should be cached
+function isApiRouteToCache(url) {
+  return API_ROUTES_TO_CACHE.some(pattern => pattern.test(url));
 }
 
 // Fetch event - stale-while-revalidate strategy for assets, network-first for API
@@ -68,6 +76,30 @@ self.addEventListener('fetch', (event) => {
 
   // Skip Supabase API requests (let them go to network)
   if (url.hostname.includes('supabase.co')) {
+    // For Supabase API, we'll use a cache-first strategy for specific endpoints
+    if (isApiRouteToCache(url.pathname)) {
+      event.respondWith(
+        caches.open(CACHE_NAME).then(cache => {
+          return cache.match(event.request).then(cachedResponse => {
+            const fetchPromise = fetch(event.request)
+              .then(networkResponse => {
+                // Cache the new version
+                if (networkResponse.ok) {
+                  cache.put(event.request, networkResponse.clone());
+                }
+                return networkResponse;
+              })
+              .catch(() => {
+                console.log('[Service Worker] Using cached API response for', url.pathname);
+                return cachedResponse;
+              });
+
+            // Return cached response immediately if available, or wait for network
+            return cachedResponse || fetchPromise;
+          });
+        })
+      );
+    }
     return;
   }
 
@@ -177,6 +209,27 @@ self.addEventListener('push', (event) => {
     );
   } catch (error) {
     console.error('Error handling push notification:', error);
+  }
+});
+
+// Message event listener for syncing data when online
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SYNC_DATA') {
+    console.log('[Service Worker] Received sync data message');
+    
+    // The client is back online and wants to sync data
+    event.waitUntil(
+      // We could perform additional operations here
+      // Like clearing specific cache entries to force a refresh
+      self.clients.matchAll().then(clients => {
+        clients.forEach(client => {
+          client.postMessage({
+            type: 'SYNC_COMPLETE',
+            timestamp: new Date().toISOString()
+          });
+        });
+      })
+    );
   }
 });
 

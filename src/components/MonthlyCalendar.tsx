@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, KeyboardEvent, useMemo, useCallback } from 'react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isToday, parseISO, addMonths, getDay, getYear, setYear } from 'date-fns';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import type { Task } from '../types/task';
 
 // Pre-defined animation variants for better performance
@@ -13,6 +13,13 @@ const overlayAnimationVariants = {
 const transitionProps = { 
   duration: 0.15, 
   ease: [0.4, 0.0, 0.2, 1]
+};
+
+// Reduced motion animation variants
+const reducedMotionVariants = {
+  hidden: { opacity: 0 },
+  visible: { opacity: 1 },
+  exit: { opacity: 0 }
 };
 
 // Weekday headers - defined outside component to prevent recreation
@@ -45,10 +52,11 @@ export function MonthlyCalendar({ isOpen, onClose, selectedDate, onSelectDate, t
   // If not open, render nothing for better performance
   if (!isOpen) return null;
 
+  const preferReducedMotion = useReducedMotion();
+  
   const [currentMonth, setCurrentMonth] = useState(selectedDate);
   const [hoveredDate, setHoveredDate] = useState<Date | null>(null);
   const [focusedDateIndex, setFocusedDateIndex] = useState<number | null>(null);
-  const [showYearSelector, setShowYearSelector] = useState(false);
   const [viewMode, setViewMode] = useState<'calendar' | 'year'>('calendar');
   const tooltipTimeoutRef = useRef<NodeJS.Timeout>();
   const calendarRef = useRef<HTMLDivElement>(null);
@@ -91,6 +99,14 @@ export function MonthlyCalendar({ isOpen, onClose, selectedDate, onSelectDate, t
       
       // Set current month to match selected date when opening
       setCurrentMonth(selectedDate);
+      
+      // Reset focus
+      setFocusedDateIndex(null);
+      
+      // Set focus to the calendar container after a small delay
+      setTimeout(() => {
+        calendarRef.current?.focus();
+      }, 100);
     }
   }, [isOpen, selectedDate]);
 
@@ -171,7 +187,7 @@ export function MonthlyCalendar({ isOpen, onClose, selectedDate, onSelectDate, t
   }, [currentMonth]);
 
   // Get tasks summary for a specific date - optimized with the task map
-  const getTaskSummary = (date: Date | null): TaskSummary => {
+  const getTaskSummary = useCallback((date: Date | null): TaskSummary => {
     if (!date) return { total: 0, completed: 0, overdue: 0, inProgress: 0 };
     
     // Quick return if no tasks
@@ -217,16 +233,32 @@ export function MonthlyCalendar({ isOpen, onClose, selectedDate, onSelectDate, t
       overdue,
       inProgress
     };
-  };
+  }, [tasksByDate]);
 
   // Month navigation handlers
   const handlePrevMonth = useCallback(() => {
-    setCurrentMonth(prevMonth => addMonths(prevMonth, -1));
-  }, []);
+    setCurrentMonth(prevMonth => {
+      const newMonth = addMonths(prevMonth, -1);
+      // Focus on a middle date of the new month
+      requestAnimationFrame(() => {
+        const midIndex = Math.floor(calendarDays.length / 2);
+        setFocusedDateIndex(midIndex);
+      });
+      return newMonth;
+    });
+  }, [calendarDays.length]);
 
   const handleNextMonth = useCallback(() => {
-    setCurrentMonth(prevMonth => addMonths(prevMonth, 1));
-  }, []);
+    setCurrentMonth(prevMonth => {
+      const newMonth = addMonths(prevMonth, 1);
+      // Focus on a middle date of the new month
+      requestAnimationFrame(() => {
+        const midIndex = Math.floor(calendarDays.length / 2);
+        setFocusedDateIndex(midIndex);
+      });
+      return newMonth;
+    });
+  }, [calendarDays.length]);
 
   // Toggle year selector
   const toggleYearSelector = useCallback(() => {
@@ -289,6 +321,22 @@ export function MonthlyCalendar({ isOpen, onClose, selectedDate, onSelectDate, t
     touchStartYRef.current = null;
   }, [handlePrevMonth, handleNextMonth]);
 
+  // Handle date selection
+  const handleDateSelection = useCallback((date: Date) => {
+    try {
+      // Create a normalized date to avoid timezone issues
+      const selectedDate = createNormalizedDate(date);
+      
+      // Pass the normalized date to ensure consistency
+      onSelectDate(selectedDate);
+      
+      // Close calendar after a short delay to ensure date selection is processed
+      setTimeout(() => onClose(), 50);
+    } catch (error) {
+      console.error('Error selecting date:', error);
+    }
+  }, [onSelectDate, onClose]);
+
   // Separate handler for date selection with touch
   const handleDateTouchEnd = useCallback((date: Date, e: React.TouchEvent) => {
     e.stopPropagation();
@@ -302,85 +350,99 @@ export function MonthlyCalendar({ isOpen, onClose, selectedDate, onSelectDate, t
       
       // If small movement, treat as a tap
       if (Math.abs(deltaX) < 30 && Math.abs(deltaY) < 30) {
-        // Create a normalized date to avoid timezone issues
-        const normalizedDate = createNormalizedDate(date);
-        
-        // Pass the normalized date to ensure consistency
-        onSelectDate(normalizedDate);
-        
-        // Close calendar after a short delay to ensure date selection is processed
-        setTimeout(() => onClose(), 50);
+        handleDateSelection(date);
       }
     }
     
     // Reset touch start references
     touchStartXRef.current = null;
     touchStartYRef.current = null;
-  }, [onSelectDate, onClose]);
+  }, [handleDateSelection]);
 
-  // Updated keyboard handler for the correct element type
-  const handleKeyDown = useCallback((e: KeyboardEvent<HTMLButtonElement>, index: number) => {
-    e.preventDefault();
-
-    // Set focused index if not already set
-    if (focusedDateIndex === null) {
-      setFocusedDateIndex(index);
-      return;
-    }
-
+  // Handle keyboard navigation for container
+  const handleContainerKeyDown = useCallback((e: KeyboardEvent<HTMLDivElement>) => {
+    if (viewMode !== 'calendar') return;
+    
     switch (e.key) {
       case 'ArrowLeft':
-        setFocusedDateIndex(prev => (prev === null ? index : Math.max(0, prev - 1)));
+        if (e.ctrlKey || e.metaKey) {
+          handlePrevMonth();
+        } else if (focusedDateIndex === null) {
+          setFocusedDateIndex(15); // Choose a middle date
+        } else {
+          setFocusedDateIndex(prev => (prev === null ? 15 : Math.max(0, prev - 1)));
+        }
+        e.preventDefault();
         break;
       case 'ArrowRight':
-        setFocusedDateIndex(prev => (prev === null ? index : Math.min(calendarDays.length - 1, prev + 1)));
+        if (e.ctrlKey || e.metaKey) {
+          handleNextMonth();
+        } else if (focusedDateIndex === null) {
+          setFocusedDateIndex(15); // Choose a middle date
+        } else {
+          setFocusedDateIndex(prev => (prev === null ? 15 : Math.min(calendarDays.length - 1, prev + 1)));
+        }
+        e.preventDefault();
         break;
       case 'ArrowUp':
-        setFocusedDateIndex(prev => (prev === null ? index : Math.max(0, prev - 7)));
+        if (focusedDateIndex === null) {
+          setFocusedDateIndex(15); // Choose a middle date
+        } else {
+          setFocusedDateIndex(prev => (prev === null ? 15 : Math.max(0, prev - 7)));
+        }
+        e.preventDefault();
         break;
       case 'ArrowDown':
-        setFocusedDateIndex(prev => (prev === null ? index : Math.min(calendarDays.length - 1, prev + 7)));
+        if (focusedDateIndex === null) {
+          setFocusedDateIndex(15); // Choose a middle date
+        } else {
+          setFocusedDateIndex(prev => (prev === null ? 15 : Math.min(calendarDays.length - 1, prev + 7)));
+        }
+        e.preventDefault();
         break;
       case 'PageUp':
         handlePrevMonth();
+        e.preventDefault();
         break;
       case 'PageDown':
         handleNextMonth();
+        e.preventDefault();
         break;
       case 'Home':
-        setFocusedDateIndex(0);
+        setFocusedDateIndex(calendarDays.findIndex(d => d !== null));
+        e.preventDefault();
         break;
       case 'End':
         setFocusedDateIndex(calendarDays.length - 1);
-        break;
-      case 'Enter':
-      case ' ':
-        if (focusedDateIndex !== null) {
-          const focusedDate = calendarDays[focusedDateIndex];
-          if (focusedDate) {
-            try {
-              // Create a normalized date from the focused date
-              const normalizedDate = createNormalizedDate(focusedDate);
-              onSelectDate(normalizedDate);
-              
-              // Close calendar after a short delay to ensure date selection is processed
-              setTimeout(() => onClose(), 50);
-            } catch (error) {
-              console.error('Error selecting date via keyboard:', error);
-            }
-          }
-        }
+        e.preventDefault();
         break;
       case 'Escape':
         onClose();
+        e.preventDefault();
         break;
     }
+    
+    // Focus the new button if needed - use requestAnimationFrame for better performance
+    requestAnimationFrame(() => {
+      if (focusedDateIndex !== null && dayButtonsRef.current[focusedDateIndex]) {
+        dayButtonsRef.current[focusedDateIndex]?.focus();
+      }
+    });
+  }, [focusedDateIndex, calendarDays, handlePrevMonth, handleNextMonth, viewMode, onClose]);
 
-    // Focus the new button if needed
-    if (focusedDateIndex !== null && dayButtonsRef.current[focusedDateIndex]) {
-      dayButtonsRef.current[focusedDateIndex]?.focus();
+  // Updated keyboard handler for the correct element type
+  const handleKeyDown = useCallback((e: KeyboardEvent<HTMLButtonElement>, index: number) => {
+    switch (e.key) {
+      case 'Enter':
+      case ' ':
+        const date = calendarDays[index];
+        if (date) {
+          handleDateSelection(date);
+          e.preventDefault();
+        }
+        break;
     }
-  }, [focusedDateIndex, calendarDays, handlePrevMonth, handleNextMonth, onSelectDate, onClose]);
+  }, [calendarDays, handleDateSelection]);
 
   // Handle click outside
   useEffect(() => {
@@ -408,14 +470,22 @@ export function MonthlyCalendar({ isOpen, onClose, selectedDate, onSelectDate, t
   const handleTodayClick = useCallback(() => {
     const today = createNormalizedDate(new Date());
     setCurrentMonth(today);
+    // Find and focus today's date
+    const todayIndex = calendarDays.findIndex(date => date && isSameDayOptimized(date, today));
+    if (todayIndex !== -1) {
+      setFocusedDateIndex(todayIndex);
+      requestAnimationFrame(() => {
+        dayButtonsRef.current[todayIndex]?.focus();
+      });
+    }
     onSelectDate(today);
-  }, [onSelectDate]);
+  }, [onSelectDate, calendarDays, isSameDayOptimized]);
 
   return (
     <AnimatePresence>
       <motion.div
         key="monthly-calendar-overlay"
-        variants={overlayAnimationVariants}
+        variants={preferReducedMotion ? reducedMotionVariants : overlayAnimationVariants}
         initial="hidden"
         animate="visible"
         exit="exit"
@@ -433,14 +503,12 @@ export function MonthlyCalendar({ isOpen, onClose, selectedDate, onSelectDate, t
           role="dialog"
           aria-modal="true"
           aria-label="Monthly Calendar"
-          onClick={(e) => {
-            // Prevent clicks on the container from closing the calendar
-            // unless they're on the background overlay
-            e.stopPropagation();
-          }}
+          onClick={(e) => e.stopPropagation()}
           onTouchStart={(e) => e.stopPropagation()}
           onTouchMove={(e) => e.stopPropagation()}
           onTouchEnd={(e) => e.stopPropagation()}
+          onKeyDown={handleContainerKeyDown}
+          tabIndex={0}
         >
           {/* Calendar header */}
           <div className="flex justify-between items-center p-4 border-b border-gray-100 dark:border-gray-700">
@@ -586,34 +654,19 @@ export function MonthlyCalendar({ isOpen, onClose, selectedDate, onSelectDate, t
                       const isFocused = focusedDateIndex === index;
 
                       return (
-                        <motion.button
+                        <button
                           key={date.toISOString()}
                           ref={el => {
                             dayButtonsRef.current[index] = el;
                           }}
-                          whileHover={{ scale: 1.05 }}
-                          whileTap={{ scale: 0.95 }}
-                          onClick={() => {
-                            try {
-                              // Create a normalized date to avoid timezone issues
-                              const selectedDate = createNormalizedDate(date);
-                              
-                              // Pass the date and ensure it's fully processed before closing
-                              onSelectDate(selectedDate);
-                              
-                              // Close calendar after a short delay to ensure date selection is processed
-                              setTimeout(() => onClose(), 50);
-                            } catch (error) {
-                              console.error('Error selecting date:', error);
-                            }
-                          }}
+                          onClick={() => handleDateSelection(date)}
                           onTouchStart={(e) => handleTouchStart(e)}
                           onTouchMove={handleTouchMove}
                           onTouchEnd={(e) => handleDateTouchEnd(date, e)}
                           onMouseEnter={() => handleMouseEnter(date)}
                           onMouseLeave={handleMouseLeave}
                           onKeyDown={(e) => handleKeyDown(e, index)}
-                          tabIndex={0}
+                          tabIndex={isFocused ? 0 : -1}
                           aria-label={`${format(date, 'MMMM d, yyyy')}${
                             summary.total > 0 ? `, ${summary.total} tasks` : ''
                           }${isSelected ? ', selected' : ''}${isTodayDate ? ', today' : ''}`}
@@ -621,7 +674,7 @@ export function MonthlyCalendar({ isOpen, onClose, selectedDate, onSelectDate, t
                           className={`
                             relative aspect-square rounded-lg
                             flex flex-col items-center justify-center gap-1
-                            transition-all duration-200 ease-in-out
+                            transform transition-all duration-150 ease-in-out
                             ${isSelected
                               ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/20 z-10'
                               : isTodayDate
@@ -629,10 +682,11 @@ export function MonthlyCalendar({ isOpen, onClose, selectedDate, onSelectDate, t
                               : 'hover:bg-gray-100 dark:hover:bg-gray-700'
                             }
                             ${isFocused 
-                              ? 'ring-2 ring-offset-2 ring-blue-500 dark:ring-offset-gray-800 z-10' 
+                              ? 'ring-2 ring-offset-2 ring-blue-500 dark:ring-offset-gray-800 z-10 scale-105' 
                               : ''
                             }
                             focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:focus:ring-offset-gray-800
+                            hover:scale-105 active:scale-95
                           `}
                         >
                           {/* Date Number */}
@@ -686,7 +740,7 @@ export function MonthlyCalendar({ isOpen, onClose, selectedDate, onSelectDate, t
                               `}
                             />
                           )}
-                        </motion.button>
+                        </button>
                       );
                     })}
                   </div>
@@ -701,7 +755,7 @@ export function MonthlyCalendar({ isOpen, onClose, selectedDate, onSelectDate, t
               {isMobileRef.current ? (
                 <p className="text-sm text-gray-500">Tap to select date</p>
               ) : (
-                <p className="text-sm text-gray-500">Swipe to navigate</p>
+                <p className="text-sm text-gray-500">Swipe or use arrow keys</p>
               )}
             </div>
             <div className="flex space-x-2">

@@ -12,21 +12,13 @@ const STATIC_ASSETS = [
   '/icons/add-task.png',
   '/icons/view-tasks.png',
   // Cache additional assets for UI
-  '/icons/badge.png',
-  '/src/index.css'
-];
-
-// API routes to cache
-const API_ROUTES_TO_CACHE = [
-  /\/api\/tasks/,
-  /\/api\/routines/,
-  /\/api\/courses/,
-  /\/api\/teachers/
+  '/icons/badge.png'
 ];
 
 // Dynamic assets that should be cached during runtime
 const RUNTIME_CACHE_PATTERNS = [
   /\.(js|css)$/, // JS and CSS files
+  /assets\/.*\.(js|css|woff2|png|jpg|svg)$/, // Vite build assets
   /\/icons\/.*\.png$/, // Icon images
   /^https:\/\/fonts\.googleapis\.com/, // Google fonts stylesheets
   /^https:\/\/fonts\.gstatic\.com/ // Google fonts files
@@ -58,13 +50,28 @@ self.addEventListener('activate', (event) => {
 
 // Helper function to determine if a URL should be cached at runtime
 function shouldCacheAtRuntime(url) {
-  // Check if the URL matches any of our patterns
-  return RUNTIME_CACHE_PATTERNS.some(pattern => pattern.test(url));
-}
-
-// Helper function to determine if a URL is an API route that should be cached
-function isApiRouteToCache(url) {
-  return API_ROUTES_TO_CACHE.some(pattern => pattern.test(url));
+  try {
+    // Skip unsupported URL schemes
+    const urlObj = new URL(url);
+    if (urlObj.protocol === 'chrome-extension:' || 
+        urlObj.protocol === 'chrome:' ||
+        urlObj.protocol === 'edge:' ||
+        urlObj.protocol === 'brave:' ||
+        urlObj.protocol !== 'http:' && urlObj.protocol !== 'https:') {
+      return false;
+    }
+    
+    // Don't cache Supabase API requests
+    if (url.includes('supabase.co')) {
+      return false;
+    }
+    
+    // Check if the URL matches any of our patterns
+    return RUNTIME_CACHE_PATTERNS.some(pattern => pattern.test(url));
+  } catch (error) {
+    console.error('Error checking URL for caching:', error, url);
+    return false;
+  }
 }
 
 // Fetch event - stale-while-revalidate strategy for assets, network-first for API
@@ -72,108 +79,121 @@ self.addEventListener('fetch', (event) => {
   // Handle non-GET requests
   if (event.request.method !== 'GET') return;
 
-  const url = new URL(event.request.url);
+  try {
+    const url = new URL(event.request.url);
 
-  // Skip Supabase API requests (let them go to network)
-  if (url.hostname.includes('supabase.co')) {
-    // For Supabase API, we'll use a cache-first strategy for specific endpoints
-    if (isApiRouteToCache(url.pathname)) {
-      event.respondWith(
-        caches.open(CACHE_NAME).then(cache => {
-          return cache.match(event.request).then(cachedResponse => {
-            const fetchPromise = fetch(event.request)
-              .then(networkResponse => {
-                // Cache the new version
-                if (networkResponse.ok) {
-                  cache.put(event.request, networkResponse.clone());
-                }
-                return networkResponse;
-              })
-              .catch(() => {
-                console.log('[Service Worker] Using cached API response for', url.pathname);
-                return cachedResponse;
-              });
-
-            // Return cached response immediately if available, or wait for network
-            return cachedResponse || fetchPromise;
-          });
-        })
-      );
+    // Skip unsupported URL schemes
+    if (url.protocol === 'chrome-extension:' || 
+        url.protocol === 'chrome:' ||
+        url.protocol === 'edge:' ||
+        url.protocol === 'brave:' ||
+        url.protocol !== 'http:' && url.protocol !== 'https:') {
+      return;
     }
-    return;
-  }
 
-  // Navigation requests (HTML pages) - network first
-  if (event.request.mode === 'navigate') {
-    event.respondWith(
-      fetch(event.request)
-        .then(response => {
-          // Cache the latest version
-          const responseClone = response.clone();
-          caches.open(CACHE_NAME).then(cache => {
-            cache.put(event.request, responseClone);
-          });
-          return response;
-        })
-        .catch(async () => {
-          // Offline fallback
-          const cache = await caches.open(CACHE_NAME);
-          const cachedResponse = await cache.match(event.request);
-          if (cachedResponse) return cachedResponse;
+    // Skip Supabase API requests (let them go to network)
+    if (url.hostname.includes('supabase.co')) {
+      return;
+    }
+
+    // Check for module scripts
+    const isModuleScript = event.request.destination === 'script' && 
+                           (url.pathname.endsWith('.mjs') || url.pathname.includes('assets/'));
+    
+    // For module scripts, ensure proper handling
+    if (isModuleScript) {
+      event.respondWith(
+        fetch(event.request)
+          .then(response => {
+            if (response.ok) {
+              // Only cache if response is valid
+              const responseClone = response.clone();
+              safeCachePut(CACHE_NAME, event.request, responseClone);
+            }
+            return response;
+          })
+          .catch(async () => {
+            // Fallback to cache
+            const cachedResponse = await safeCacheMatch(CACHE_NAME, event.request);
+            return cachedResponse || new Response('Module not available', { status: 404 });
+          })
+      );
+      return;
+    }
+
+    // Navigation requests (HTML pages) - network first
+    if (event.request.mode === 'navigate') {
+      event.respondWith(
+        fetch(event.request)
+          .then(response => {
+            // Cache the latest version
+            const responseClone = response.clone();
+            safeCachePut(CACHE_NAME, event.request, responseClone);
+            return response;
+          })
+          .catch(async () => {
+            // Offline fallback
+            const cachedResponse = await safeCacheMatch(CACHE_NAME, event.request);
+            if (cachedResponse) return cachedResponse;
+            
+            // If no cached version, show offline page
+            return safeCacheMatch(CACHE_NAME, OFFLINE_URL);
+          })
+      );
+      return;
+    }
+
+    // For runtime-cacheable assets (JS, CSS, images) - stale-while-revalidate
+    if (shouldCacheAtRuntime(event.request.url)) {
+      event.respondWith(
+        (async () => {
+          // Try to get from cache first
+          const cachedResponse = await safeCacheMatch(CACHE_NAME, event.request);
           
-          // If no cached version, show offline page
-          return cache.match(OFFLINE_URL);
-        })
-    );
-    return;
-  }
-
-  // For runtime-cacheable assets (JS, CSS, images) - stale-while-revalidate
-  if (shouldCacheAtRuntime(event.request.url)) {
-    event.respondWith(
-      caches.open(CACHE_NAME).then(cache => {
-        return cache.match(event.request).then(cachedResponse => {
+          // Fetch from network in background
           const fetchPromise = fetch(event.request)
             .then(networkResponse => {
               // Cache the new version
-              cache.put(event.request, networkResponse.clone());
+              safeCachePut(CACHE_NAME, event.request, networkResponse.clone());
               return networkResponse;
             })
             .catch(() => {
               // If fetch fails, return cached or null
               return cachedResponse || null;
             });
-
+            
           // Return cached response immediately, or wait for network
           return cachedResponse || fetchPromise;
-        });
-      })
+        })()
+      );
+      return;
+    }
+
+    // For all other requests - network first with cache fallback
+    event.respondWith(
+      fetch(event.request)
+        .then(response => {
+          // Cache successful responses that match patterns
+          if (response.ok && shouldCacheAtRuntime(event.request.url)) {
+            const responseClone = response.clone();
+            safeCachePut(CACHE_NAME, event.request, responseClone);
+          }
+          return response;
+        })
+        .catch(async () => {
+          // Try to get from cache
+          const cachedResponse = await safeCacheMatch(CACHE_NAME, event.request);
+          if (cachedResponse) return cachedResponse;
+
+          // Return error response
+          return new Response('Network error', { status: 408 });
+        })
     );
+  } catch (error) {
+    console.error('Error in fetch handler:', error, event.request.url);
+    // Let the browser handle this request normally
     return;
   }
-
-  // For all other requests - network first with cache fallback
-  event.respondWith(
-    fetch(event.request)
-      .then(response => {
-        // Cache successful responses that match patterns
-        if (response.ok && shouldCacheAtRuntime(event.request.url)) {
-          const responseClone = response.clone();
-          caches.open(CACHE_NAME).then(cache => {
-            cache.put(event.request, responseClone);
-          });
-        }
-        return response;
-      })
-      .catch(async () => {
-        // Try to get from cache
-        const cachedResponse = await caches.match(event.request);
-        if (cachedResponse) return cachedResponse;
-
-        // Return error response
-        return new Response('Network error', { status: 408 });
-      })
-  );
 });
 
 // Push notification handler
@@ -209,27 +229,6 @@ self.addEventListener('push', (event) => {
     );
   } catch (error) {
     console.error('Error handling push notification:', error);
-  }
-});
-
-// Message event listener for syncing data when online
-self.addEventListener('message', (event) => {
-  if (event.data && event.data.type === 'SYNC_DATA') {
-    console.log('[Service Worker] Received sync data message');
-    
-    // The client is back online and wants to sync data
-    event.waitUntil(
-      // We could perform additional operations here
-      // Like clearing specific cache entries to force a refresh
-      self.clients.matchAll().then(clients => {
-        clients.forEach(client => {
-          client.postMessage({
-            type: 'SYNC_COMPLETE',
-            timestamp: new Date().toISOString()
-          });
-        });
-      })
-    );
   }
 });
 
@@ -280,3 +279,35 @@ self.addEventListener('notificationclick', (event) => {
       })
   );
 });
+
+// Add global error handlers
+self.addEventListener('error', (event) => {
+  console.error('Service Worker error:', event.error);
+});
+
+self.addEventListener('unhandledrejection', (event) => {
+  console.error('Service Worker unhandled rejection:', event.reason);
+});
+
+// Add a safe cache helper function
+async function safeCachePut(cacheName, request, response) {
+  try {
+    const cache = await caches.open(cacheName);
+    await cache.put(request, response);
+    return true;
+  } catch (error) {
+    console.error('Safe cache put error:', error, request.url);
+    return false;
+  }
+}
+
+// Add a safe cache match function
+async function safeCacheMatch(cacheName, request) {
+  try {
+    const cache = await caches.open(cacheName);
+    return await cache.match(request);
+  } catch (error) {
+    console.error('Safe cache match error:', error, request.url);
+    return null;
+  }
+}

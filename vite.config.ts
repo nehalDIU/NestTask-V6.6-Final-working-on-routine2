@@ -8,7 +8,7 @@ export default defineConfig({
   plugins: [
     react(),
     compression({
-      algorithm: 'brotli',
+      algorithm: 'brotli' as const,
       ext: '.br'
     }),
     compression({
@@ -38,6 +38,14 @@ export default defineConfig({
           'ui-components': ['@radix-ui/react-dialog', 'framer-motion'],
           'supabase': ['@supabase/supabase-js'],
           'icons': ['lucide-react']
+        },
+        // Ensure proper file types and names
+        assetFileNames: (assetInfo) => {
+          const info = assetInfo.name || '';
+          if (info.endsWith('.css')) {
+            return 'assets/css/[name].[hash][extname]';
+          }
+          return 'assets/[name].[hash][extname]';
         }
       }
     },

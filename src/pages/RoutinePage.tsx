@@ -17,15 +17,12 @@ import {
   User,
   Info,
   Code,
-  ExternalLink,
-  WifiOff
+  ExternalLink
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { TeacherDetailsModal } from './TeacherDetailsModal';
 import type { Teacher } from '../types/teacher';
 import { getInitials } from '../utils/stringUtils';
-import { useOfflineStatus } from '../hooks/useOfflineStatus';
-import { OfflineBanner } from '../components/ui/OfflineBanner';
 
 export function RoutinePage() {
   const { routines, loading } = useRoutines();
@@ -37,7 +34,6 @@ export function RoutinePage() {
   const [selectedTeacher, setSelectedTeacher] = useState<Teacher | null>(null);
   const [enrichedSlots, setEnrichedSlots] = useState<any[]>([]);
   const [showMobileSearch, setShowMobileSearch] = useState(false);
-  const isOffline = useOfflineStatus();
 
   const currentRoutine = routines.find(r => r.isActive) || routines[0];
 
@@ -135,283 +131,277 @@ export function RoutinePage() {
   }
 
   return (
-    <div className="space-y-8">
-      {isOffline && (
-        <OfflineBanner message="You are currently offline. Showing cached routine data." />
-      )}
-      
-      <div className="max-w-7xl mx-auto px-3 sm:px-4 py-4 sm:py-8">
-        {/* Header Section */}
-        <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg mb-4 sm:mb-6 p-3 sm:p-4 shadow-sm">
-          {/* Mobile View Header */}
-          <div className="flex flex-col space-y-3 md:hidden">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Calendar className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600 dark:text-blue-400" />
-                <h1 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white">Class Routine</h1>
-              </div>
-              
-              <button 
-                onClick={() => setShowMobileSearch(!showMobileSearch)}
-                className="p-2 bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600"
-                aria-label={showMobileSearch ? "Hide search" : "Show search"}
-              >
-                <Search className="w-5 h-5 text-gray-500 dark:text-gray-400" />
-              </button>
+    <div className="max-w-7xl mx-auto px-3 sm:px-4 py-4 sm:py-8">
+      {/* Header Section */}
+      <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg mb-4 sm:mb-6 p-3 sm:p-4 shadow-sm">
+        {/* Mobile View Header */}
+        <div className="flex flex-col space-y-3 md:hidden">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Calendar className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600 dark:text-blue-400" />
+              <h1 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white">Class Routine</h1>
             </div>
             
-            <p className="text-sm text-gray-500 dark:text-gray-400">
+            <button 
+              onClick={() => setShowMobileSearch(!showMobileSearch)}
+              className="p-2 bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600"
+              aria-label={showMobileSearch ? "Hide search" : "Show search"}
+            >
+              <Search className="w-5 h-5 text-gray-500 dark:text-gray-400" />
+            </button>
+          </div>
+          
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            {currentRoutine.name} - {currentRoutine.semester}
+          </p>
+          
+          {/* Mobile Search Input (toggle visibility with state) */}
+          <AnimatePresence>
+            {showMobileSearch && (
+              <motion.div 
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="overflow-hidden"
+              >
+                <div className="relative mt-2">
+                  <input
+                    type="text"
+                    placeholder="Search courses, teachers, rooms..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 border dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white text-sm"
+                  />
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+          
+          {sections.length > 0 && (
+            <div className="relative mt-1">
+              <select
+                value={selectedSection}
+                onChange={(e) => setSelectedSection(e.target.value)}
+                className="w-full pl-9 pr-8 py-2 border dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white text-sm appearance-none"
+              >
+                <option value="">All Sections</option>
+                {sections.map(section => (
+                  <option key={section} value={section}>{section}</option>
+                ))}
+              </select>
+              <Users className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <ChevronRight className="absolute right-2 top-1/2 transform -translate-y-1/2 rotate-90 text-gray-400 w-4 h-4" />
+            </div>
+          )}
+        </div>
+
+        {/* Desktop View Header */}
+        <div className="hidden md:flex md:flex-row md:flex-wrap md:items-center md:justify-between gap-y-4">
+          <div>
+            <h1 className="text-xl lg:text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+              <Calendar className="w-6 h-6 lg:w-7 lg:h-7 text-blue-600 dark:text-blue-400" />
+              Class Routine
+            </h1>
+            <p className="text-sm lg:text-base text-gray-500 dark:text-gray-400 mt-1">
               {currentRoutine.name} - {currentRoutine.semester}
             </p>
-            
-            {/* Mobile Search Input (toggle visibility with state) */}
-            <AnimatePresence>
-              {showMobileSearch && (
-                <motion.div 
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="overflow-hidden"
-                >
-                  <div className="relative mt-2">
-                    <input
-                      type="text"
-                      placeholder="Search courses, teachers, rooms..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2 border dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white text-sm"
-                    />
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-            
+          </div>
+
+          <div className="flex items-center gap-3 flex-wrap">
             {sections.length > 0 && (
-              <div className="relative mt-1">
+              <div className="relative">
                 <select
                   value={selectedSection}
                   onChange={(e) => setSelectedSection(e.target.value)}
-                  className="w-full pl-9 pr-8 py-2 border dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white text-sm appearance-none"
+                  className="pl-10 pr-4 py-2 border dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white appearance-none"
                 >
                   <option value="">All Sections</option>
                   {sections.map(section => (
                     <option key={section} value={section}>{section}</option>
                   ))}
                 </select>
-                <Users className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                <ChevronRight className="absolute right-2 top-1/2 transform -translate-y-1/2 rotate-90 text-gray-400 w-4 h-4" />
+                <Users className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                <ChevronRight className="absolute right-3 top-1/2 transform -translate-y-1/2 rotate-90 text-gray-400 w-4 h-4" />
               </div>
             )}
-          </div>
 
-          {/* Desktop View Header */}
-          <div className="hidden md:flex md:flex-row md:flex-wrap md:items-center md:justify-between gap-y-4">
-            <div>
-              <h1 className="text-xl lg:text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                <Calendar className="w-6 h-6 lg:w-7 lg:h-7 text-blue-600 dark:text-blue-400" />
-                Class Routine
-              </h1>
-              <p className="text-sm lg:text-base text-gray-500 dark:text-gray-400 mt-1">
-                {currentRoutine.name} - {currentRoutine.semester}
-              </p>
-            </div>
-
-            <div className="flex items-center gap-3 flex-wrap">
-              {sections.length > 0 && (
-                <div className="relative">
-                  <select
-                    value={selectedSection}
-                    onChange={(e) => setSelectedSection(e.target.value)}
-                    className="pl-10 pr-4 py-2 border dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white appearance-none"
-                  >
-                    <option value="">All Sections</option>
-                    {sections.map(section => (
-                      <option key={section} value={section}>{section}</option>
-                    ))}
-                  </select>
-                  <Users className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                  <ChevronRight className="absolute right-3 top-1/2 transform -translate-y-1/2 rotate-90 text-gray-400 w-4 h-4" />
-                </div>
-              )}
-
-              <div className="relative w-full sm:w-auto sm:flex-grow">
-                <input
-                  type="text"
-                  placeholder="Search courses, teachers, rooms..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-                />
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-              </div>
+            <div className="relative w-full sm:w-auto sm:flex-grow">
+              <input
+                type="text"
+                placeholder="Search courses, teachers, rooms..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+              />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
             </div>
           </div>
         </div>
+      </div>
 
-        {/* Calendar Strip */}
-        <div className="mb-4 sm:mb-6">
-          <div className="flex items-center justify-between mb-2 sm:mb-4">
+      {/* Calendar Strip */}
+      <div className="mb-4 sm:mb-6">
+        <div className="flex items-center justify-between mb-2 sm:mb-4">
+          <button
+            onClick={() => {
+              const prevDay = addDays(selectedDate, -1);
+              setSelectedDate(prevDay);
+            }}
+            className="p-1.5 sm:p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+            aria-label="Previous day"
+          >
+            <ChevronLeft className="w-4 h-4 sm:w-5 sm:h-5" />
+          </button>
+
+          <h2 className="text-sm sm:text-base lg:text-lg font-semibold text-gray-900 dark:text-white">
+            {format(selectedDate, 'EEEE, MMMM d')}
+          </h2>
+
+          <button
+            onClick={() => {
+              const nextDay = addDays(selectedDate, 1);
+              setSelectedDate(nextDay);
+            }}
+            className="p-1.5 sm:p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+            aria-label="Next day"
+          >
+            <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5" />
+          </button>
+        </div>
+
+        <div className="grid grid-cols-6 gap-1 sm:gap-2">
+          {weekDays.map((day) => (
             <button
-              onClick={() => {
-                const prevDay = addDays(selectedDate, -1);
-                setSelectedDate(prevDay);
-              }}
-              className="p-1.5 sm:p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
-              aria-label="Previous day"
+              key={day.dayName}
+              onClick={() => setSelectedDate(day.date)}
+              className={`
+                flex flex-col items-center py-2 px-0.5 xs:py-2.5 xs:px-1 sm:p-3 md:p-4 rounded-xl transition-all duration-200 touch-manipulation focus:outline-none focus:ring-2 focus:ring-blue-500
+                ${day.isSelected
+                  ? 'bg-blue-600 text-white shadow-md scale-[1.02] focus:ring-blue-300'
+                  : 'bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700'
+                }
+              `}
             >
-              <ChevronLeft className="w-4 h-4 sm:w-5 sm:h-5" />
+              <span className={`
+                text-[0.65rem] xs:text-xs sm:text-sm font-medium mb-0.5 sm:mb-1
+                ${day.isSelected
+                  ? 'text-blue-100'
+                  : 'text-gray-500 dark:text-gray-400'
+                }
+              `}>
+                {day.dayName}
+              </span>
+              <span className={`
+                text-base xs:text-lg sm:text-xl md:text-2xl font-bold
+                ${day.isSelected
+                  ? 'text-white'
+                  : 'text-gray-900 dark:text-white'
+                }
+              `}>
+                {day.dayNum}
+              </span>
             </button>
+          ))}
+        </div>
+      </div>
 
-            <h2 className="text-sm sm:text-base lg:text-lg font-semibold text-gray-900 dark:text-white">
-              {format(selectedDate, 'EEEE, MMMM d')}
-            </h2>
-
-            <button
-              onClick={() => {
-                const nextDay = addDays(selectedDate, 1);
-                setSelectedDate(nextDay);
-              }}
-              className="p-1.5 sm:p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
-              aria-label="Next day"
-            >
-              <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5" />
-            </button>
+      {/* Class Schedule */}
+      <div className="space-y-2 sm:space-y-3">
+        {filteredSlots.length === 0 ? (
+          <div className="text-center py-8 sm:py-12 bg-white dark:bg-gray-800 rounded-xl shadow-sm">
+            <Clock className="w-10 h-10 sm:w-12 sm:h-12 text-gray-400 dark:text-gray-500 mx-auto mb-3 sm:mb-4" />
+            <h3 className="text-base sm:text-lg font-medium text-gray-900 dark:text-white mb-1 sm:mb-2">
+              No Classes Scheduled
+            </h3>
+            <p className="text-sm sm:text-base text-gray-500 dark:text-gray-400 px-4">
+              There are no classes scheduled for this day
+              {selectedSection && ` in section ${selectedSection}`}
+              {searchTerm && ` matching "${searchTerm}"`}.
+            </p>
           </div>
-
-          <div className="grid grid-cols-6 gap-1 sm:gap-2">
-            {weekDays.map((day) => (
-              <button
-                key={day.dayName}
-                onClick={() => setSelectedDate(day.date)}
-                className={`
-                  flex flex-col items-center py-2 px-0.5 xs:py-2.5 xs:px-1 sm:p-3 md:p-4 rounded-xl transition-all duration-200 touch-manipulation focus:outline-none focus:ring-2 focus:ring-blue-500
-                  ${day.isSelected
-                    ? 'bg-blue-600 text-white shadow-md scale-[1.02] focus:ring-blue-300'
-                    : 'bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700'
-                  }
-                `}
+        ) : (
+          filteredSlots
+            .sort((a, b) => a.startTime.localeCompare(b.startTime))
+            .map((slot) => (
+              <motion.div
+                key={slot.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-white dark:bg-gray-800 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-300 border border-gray-100 dark:border-gray-700/50"
               >
-                <span className={`
-                  text-[0.65rem] xs:text-xs sm:text-sm font-medium mb-0.5 sm:mb-1
-                  ${day.isSelected
-                    ? 'text-blue-100'
-                    : 'text-gray-500 dark:text-gray-400'
-                  }
-                `}>
-                  {day.dayName}
-                </span>
-                <span className={`
-                  text-base xs:text-lg sm:text-xl md:text-2xl font-bold
-                  ${day.isSelected
-                    ? 'text-white'
-                    : 'text-gray-900 dark:text-white'
-                  }
-                `}>
-                  {day.dayNum}
-                </span>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Class Schedule */}
-        <div className="space-y-2 sm:space-y-3">
-          {filteredSlots.length === 0 ? (
-            <div className="text-center py-8 sm:py-12 bg-white dark:bg-gray-800 rounded-xl shadow-sm">
-              <Clock className="w-10 h-10 sm:w-12 sm:h-12 text-gray-400 dark:text-gray-500 mx-auto mb-3 sm:mb-4" />
-              <h3 className="text-base sm:text-lg font-medium text-gray-900 dark:text-white mb-1 sm:mb-2">
-                No Classes Scheduled
-              </h3>
-              <p className="text-sm sm:text-base text-gray-500 dark:text-gray-400 px-4">
-                There are no classes scheduled for this day
-                {selectedSection && ` in section ${selectedSection}`}
-                {searchTerm && ` matching "${searchTerm}"`}.
-              </p>
-            </div>
-          ) : (
-            filteredSlots
-              .sort((a, b) => a.startTime.localeCompare(b.startTime))
-              .map((slot) => (
-                <motion.div
-                  key={slot.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="bg-white dark:bg-gray-800 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-300 border border-gray-100 dark:border-gray-700/50"
-                >
-                  <div className="flex flex-row items-stretch h-full">
-                    {/* Time Column */}
-                    <div className="w-[85px] sm:w-[120px] md:w-[180px] bg-gray-50 dark:bg-gray-800/40 flex flex-col justify-center items-center py-3 sm:py-5 md:py-6 px-2 sm:px-3 md:px-4 border-r border-gray-100 dark:border-gray-700/50">
-                      <div className="text-xl sm:text-3xl md:text-4xl font-semibold text-gray-700 dark:text-gray-300">
-                        {format(new Date(`2000-01-01T${slot.startTime}`), 'HH:mm')}
-                      </div>
-                      
-                      {/* Small lines for the separator */}
-                      <div className="my-2 sm:my-3 md:my-4 w-10 sm:w-12 md:w-16 border-t border-gray-200 dark:border-gray-600"></div>
-                      
-                      <div className="text-xl sm:text-3xl md:text-4xl font-semibold text-gray-700 dark:text-gray-300">
-                        {format(new Date(`2000-01-01T${slot.endTime}`), 'HH:mm')}
-                      </div>
+                <div className="flex flex-row items-stretch h-full">
+                  {/* Time Column */}
+                  <div className="w-[85px] sm:w-[120px] md:w-[180px] bg-gray-50 dark:bg-gray-800/40 flex flex-col justify-center items-center py-3 sm:py-5 md:py-6 px-2 sm:px-3 md:px-4 border-r border-gray-100 dark:border-gray-700/50">
+                    <div className="text-xl sm:text-3xl md:text-4xl font-semibold text-gray-700 dark:text-gray-300">
+                      {format(new Date(`2000-01-01T${slot.startTime}`), 'HH:mm')}
                     </div>
+                    
+                    {/* Small lines for the separator */}
+                    <div className="my-2 sm:my-3 md:my-4 w-10 sm:w-12 md:w-16 border-t border-gray-200 dark:border-gray-600"></div>
+                    
+                    <div className="text-xl sm:text-3xl md:text-4xl font-semibold text-gray-700 dark:text-gray-300">
+                      {format(new Date(`2000-01-01T${slot.endTime}`), 'HH:mm')}
+                    </div>
+                  </div>
 
-                    {/* Content Column */}
-                    <div className="flex-1 p-3 sm:p-5 md:p-8">
-                      <h3 className="text-base sm:text-xl md:text-2xl font-medium text-slate-600 dark:text-slate-300 mb-2 sm:mb-4 md:mb-6">
-                        {slot.courseName || (slot.course ? slot.course.name : 'No Course Name')}
-                      </h3>
+                  {/* Content Column */}
+                  <div className="flex-1 p-3 sm:p-5 md:p-8">
+                    <h3 className="text-base sm:text-xl md:text-2xl font-medium text-slate-600 dark:text-slate-300 mb-2 sm:mb-4 md:mb-6">
+                      {slot.courseName || (slot.course ? slot.course.name : 'No Course Name')}
+                    </h3>
+                    
+                    <div className="space-y-2 sm:space-y-3 md:space-y-4">
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs sm:text-sm md:text-lg text-gray-500 dark:text-gray-400">Course</span>
+                        <span className="text-xs sm:text-sm md:text-lg font-medium text-gray-800 dark:text-gray-200">{slot.course?.code || 'N/A'}</span>
+                      </div>
                       
-                      <div className="space-y-2 sm:space-y-3 md:space-y-4">
-                        <div className="flex justify-between items-center">
-                          <span className="text-xs sm:text-sm md:text-lg text-gray-500 dark:text-gray-400">Course</span>
-                          <span className="text-xs sm:text-sm md:text-lg font-medium text-gray-800 dark:text-gray-200">{slot.course?.code || 'N/A'}</span>
-                        </div>
-                        
-                        <div className="flex justify-between items-center">
-                          <span className="text-xs sm:text-sm md:text-lg text-gray-500 dark:text-gray-400">Section</span>
-                          <span className="text-xs sm:text-sm md:text-lg font-medium text-gray-800 dark:text-gray-200">{slot.section || 'N/A'}</span>
-                        </div>
-                        
-                        <div className="flex justify-between items-center">
-                          <span className="text-xs sm:text-sm md:text-lg text-gray-500 dark:text-gray-400">Teacher</span>
-                          <span className="text-xs sm:text-sm md:text-lg font-medium">
-                            {slot.teacherId ? (
-                              <button
-                                onClick={() => {
-                                  // Find the full teacher object for modal display
-                                  const fullTeacher = teachers.find(t => t.id === slot.teacherId);
-                                  setSelectedTeacher(fullTeacher || null);
-                                }}
-                                className="text-indigo-500 dark:text-indigo-400 hover:text-indigo-600 dark:hover:text-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 rounded"
-                                title={slot.teacherName || (slot.teacher ? slot.teacher.name : 'N/A')}
-                              >
-                                {getInitials(slot.teacherName || (slot.teacher ? slot.teacher.name : undefined))}
-                              </button>
-                            ) : (
-                              'N/A'
-                            )}
-                          </span>
-                        </div>
-                        
-                        <div className="flex justify-between items-center">
-                          <span className="text-xs sm:text-sm md:text-lg text-gray-500 dark:text-gray-400">Room</span>
-                          <span className="text-xs sm:text-sm md:text-lg font-medium text-gray-800 dark:text-gray-200">{slot.roomNumber || 'N/A'}</span>
-                        </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs sm:text-sm md:text-lg text-gray-500 dark:text-gray-400">Section</span>
+                        <span className="text-xs sm:text-sm md:text-lg font-medium text-gray-800 dark:text-gray-200">{slot.section || 'N/A'}</span>
+                      </div>
+                      
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs sm:text-sm md:text-lg text-gray-500 dark:text-gray-400">Teacher</span>
+                        <span className="text-xs sm:text-sm md:text-lg font-medium">
+                          {slot.teacherId ? (
+                            <button
+                              onClick={() => {
+                                // Find the full teacher object for modal display
+                                const fullTeacher = teachers.find(t => t.id === slot.teacherId);
+                                setSelectedTeacher(fullTeacher || null);
+                              }}
+                              className="text-indigo-500 dark:text-indigo-400 hover:text-indigo-600 dark:hover:text-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 rounded"
+                              title={slot.teacherName || (slot.teacher ? slot.teacher.name : 'N/A')}
+                            >
+                              {getInitials(slot.teacherName || (slot.teacher ? slot.teacher.name : undefined))}
+                            </button>
+                          ) : (
+                            'N/A'
+                          )}
+                        </span>
+                      </div>
+                      
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs sm:text-sm md:text-lg text-gray-500 dark:text-gray-400">Room</span>
+                        <span className="text-xs sm:text-sm md:text-lg font-medium text-gray-800 dark:text-gray-200">{slot.roomNumber || 'N/A'}</span>
                       </div>
                     </div>
                   </div>
-                </motion.div>
-              ))
-          )}
-        </div>
-
-        {/* Teacher Details Modal */}
-        {selectedTeacher && (
-          <TeacherDetailsModal
-            teacher={selectedTeacher}
-            onClose={() => setSelectedTeacher(null)}
-          />
+                </div>
+              </motion.div>
+            ))
         )}
       </div>
+
+      {/* Teacher Details Modal */}
+      {selectedTeacher && (
+        <TeacherDetailsModal
+          teacher={selectedTeacher}
+          onClose={() => setSelectedTeacher(null)}
+        />
+      )}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, KeyboardEvent, useMemo, useCallback, lazy, Suspense } from 'react';
+import { useState, useEffect, useRef, KeyboardEvent, useMemo, useCallback, memo } from 'react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isToday, parseISO, addMonths, getDay, getYear, setYear } from 'date-fns';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import type { Task } from '../types/task';
@@ -79,7 +79,8 @@ interface CalendarDay {
   isSelected: boolean;
 }
 
-export function MonthlyCalendar({ isOpen, onClose, selectedDate, onSelectDate, tasks }: MonthlyCalendarProps) {
+// Wrap the component with memo to optimize renders
+const MonthlyCalendarBase = ({ isOpen, onClose, selectedDate, onSelectDate, tasks }: MonthlyCalendarProps) => {
   // If not open, render nothing for better performance
   if (!isOpen) return null;
 
@@ -740,6 +741,7 @@ export function MonthlyCalendar({ isOpen, onClose, selectedDate, onSelectDate, t
     };
   }, [tasks]);
 
+  // Return all the JSX and UI implementation
   return (
     <AnimatePresence>
       {isOpen && (
@@ -1070,5 +1072,8 @@ export function MonthlyCalendar({ isOpen, onClose, selectedDate, onSelectDate, t
       )}
     </AnimatePresence>
   );
-}
+};
+
+// Export the memoized component to prevent unnecessary re-renders
+export const MonthlyCalendar = memo(MonthlyCalendarBase);
 

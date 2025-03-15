@@ -39,6 +39,84 @@ export async function registerPushNotifications() {
   }
 }
 
+// Register service worker for offline support
+export async function registerServiceWorker() {
+  if ('serviceWorker' in navigator) {
+    try {
+      const registration = await navigator.serviceWorker.register('/service-worker.js', {
+        scope: '/',
+      });
+      
+      console.log('Service Worker registered with scope:', registration.scope);
+      
+      // Set up service worker update handling
+      registration.addEventListener('updatefound', () => {
+        const newWorker = registration.installing;
+        if (newWorker) {
+          newWorker.addEventListener('statechange', () => {
+            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+              // New content is available, show update notification if desired
+              console.log('New version available! Refresh to update.');
+            }
+          });
+        }
+      });
+      
+      // Handle service worker errors
+      if (registration.installing) {
+        registration.installing.addEventListener('statechange', (event) => {
+          if ((event.target as ServiceWorker).state === 'redundant') {
+            console.error('Service Worker installation failed. Trying again...');
+            // Re-register after a delay
+            setTimeout(() => {
+              registerServiceWorker();
+            }, 5000);
+          }
+        });
+      }
+      
+      // Automatically update service worker when a new version is detected
+      if (registration.active) {
+        // Check for updates every hour
+        setInterval(() => {
+          registration.update()
+            .catch(err => console.error('Error updating service worker:', err));
+        }, 60 * 60 * 1000);
+      }
+      
+      return registration;
+    } catch (error) {
+      console.error('Service Worker registration failed:', error);
+      
+      // Try to unregister any existing service workers and retry registration
+      try {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        for (const registration of registrations) {
+          await registration.unregister();
+        }
+        console.log('Unregistered existing service workers. Retrying registration...');
+        
+        // Retry registration after a delay
+        setTimeout(() => {
+          registerServiceWorker();
+        }, 3000);
+      } catch (unregisterError) {
+        console.error('Error unregistering service workers:', unregisterError);
+      }
+      
+      return null;
+    }
+  }
+  
+  return null;
+}
+
+// Initialize PWA features
+export async function initPWA() {
+  checkInstallability();
+  await registerServiceWorker();
+}
+
 // Helper function to convert VAPID key
 function urlBase64ToUint8Array(base64String: string) {
   const padding = '='.repeat((4 - base64String.length % 4) % 4);

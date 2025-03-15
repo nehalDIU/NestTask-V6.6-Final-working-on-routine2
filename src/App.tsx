@@ -19,8 +19,8 @@ import { LoadingScreen } from './components/LoadingScreen';
 import { InstallPWA } from './components/InstallPWA';
 import { OfflineIndicator } from './components/ui/OfflineIndicator';
 import { OfflineToast } from './components/ui/OfflineToast';
-import { OfflineBanner } from './components/ui/OfflineBanner';
-import { ListTodo, CheckCircle2, Clock, AlertCircle, WifiOff } from 'lucide-react';
+import { OfflineSyncManager } from './components/ui/OfflineSyncManager';
+import { ListTodo, CheckCircle2, Clock, AlertCircle } from 'lucide-react';
 import { TaskCategories } from './components/task/TaskCategories';
 import { isOverdue, isSameDay } from './utils/dateUtils';
 import { useOfflineStatus } from './hooks/useOfflineStatus';
@@ -32,7 +32,15 @@ type StatFilter = 'all' | 'overdue' | 'in-progress' | 'completed';
 export default function App() {
   const { user, loading: authLoading, error: authError, login, signup, logout } = useAuth();
   const { users, loading: usersLoading } = useUsers();
-  const { tasks, loading: tasksLoading, createTask, updateTask, deleteTask } = useTasks(user?.id);
+  const { 
+    tasks, 
+    loading: tasksLoading, 
+    createTask, 
+    updateTask, 
+    deleteTask,
+    refreshTasks,
+    syncOfflineChanges
+  } = useTasks(user?.id);
   const { 
     notifications, 
     unreadCount,
@@ -184,10 +192,6 @@ export default function App() {
       default:
         return (
           <div className="space-y-8">
-            {isOffline && (
-              <OfflineBanner message="You are currently offline. Showing cached tasks and data." />
-            )}
-            
             {/* Welcome Section */}
             <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-2xl p-6 sm:p-8 text-white">
               <h1 className="text-2xl sm:text-3xl font-bold mb-2">
@@ -364,6 +368,7 @@ export default function App() {
       <InstallPWA />
       <OfflineIndicator />
       <OfflineToast />
+      <OfflineSyncManager onSync={syncOfflineChanges} />
     </div>
   );
 }

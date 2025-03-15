@@ -7,6 +7,12 @@ import { TaskDetailsPopup } from '../components/task/TaskDetailsPopup';
 import { MonthlyCalendar } from '../components/MonthlyCalendar';
 import type { Task } from '../types';
 
+// Define strict types for category info
+interface CategoryInfo {
+  icon: React.ReactNode;
+  color: string;
+}
+
 interface UpcomingPageProps {
   tasks: Task[];
 }
@@ -178,9 +184,12 @@ export function UpcomingPage() {
     };
   };
 
-  // Get category info with icon and color
-  const getCategoryInfo = (category: string) => {
-    const categories = {
+  // Improved, type-safe getCategoryInfo function
+  const getCategoryInfo = (category: any): CategoryInfo => {
+    // Ensure category is a string
+    const categoryStr = typeof category === 'string' ? category : 'default';
+    
+    const categories: Record<string, CategoryInfo> = {
       task: {
         icon: <BookOpen className="w-3 h-3 md:w-4 md:h-4" />,
         color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300'
@@ -213,19 +222,19 @@ export function UpcomingPage() {
         icon: <Activity className="w-3 h-3 md:w-4 md:h-4" />,
         color: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-300'
       },
-      'documents': {
+      documents: {
         icon: <FileText className="w-3 h-3 md:w-4 md:h-4" />,
         color: 'bg-gray-100 text-gray-700 dark:bg-gray-900/20 dark:text-gray-300'
       },
-      'blc': {
+      blc: {
         icon: <Building className="w-3 h-3 md:w-4 md:h-4" />,
         color: 'bg-amber-100 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300'
       },
-      'groups': {
+      groups: {
         icon: <Users className="w-3 h-3 md:w-4 md:h-4" />,
         color: 'bg-sky-100 text-sky-700 dark:bg-sky-900/20 dark:text-sky-300'
       },
-      'others': {
+      others: {
         icon: <Tag className="w-3 h-3 md:w-4 md:h-4" />,
         color: 'bg-gray-100 text-gray-700 dark:bg-gray-900/20 dark:text-gray-300'
       },
@@ -234,7 +243,9 @@ export function UpcomingPage() {
         color: 'bg-gray-100 text-gray-700 dark:bg-gray-900/20 dark:text-gray-300'
       }
     };
-    return categories[category as keyof typeof categories] || categories.default;
+    
+    // Try to get the category info, fall back to default if not found
+    return categories[categoryStr] || categories.default;
   };
 
   // Handle task status update
@@ -256,16 +267,16 @@ export function UpcomingPage() {
         // Update the task
         const updatedTask = await updateTask(taskId, { status: newStatus });
         
-        // Update local state
+        // Update local state with strict typing
         setTasks(prevTasks => 
           prevTasks.map(task => 
-            task.id === taskId ? updatedTask : task
+            task.id === taskId ? (updatedTask as Task) : task
           )
         );
 
         // Update selected task if it's the one being updated
         if (selectedTask?.id === taskId) {
-          setSelectedTask(updatedTask);
+          setSelectedTask(updatedTask as Task);
         }
       } catch (error) {
         // Revert to original status on error
@@ -438,55 +449,79 @@ export function UpcomingPage() {
         {filteredTasks.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredTasks.map((task) => {
+              // Safely handle task object
+              if (!task || typeof task !== 'object') return null;
+              
+              // Safe defaults for missing properties
+              const taskId = typeof task.id === 'string' ? task.id : `task-${Math.random()}`;
+              const taskName = typeof task.name === 'string' ? task.name : 'Untitled Task';
+              const taskDescription = typeof task.description === 'string' ? task.description : '';
+              const taskCategory = typeof task.category === 'string' ? task.category : 'default';
+              const taskStatus = typeof task.status === 'string' ? task.status : 'my-tasks';
+              const taskIsAdmin = !!task.isAdminTask;
+              
+              let taskDueDate;
+              try {
+                taskDueDate = parseISO(task.dueDate);
+                // Check if the date is valid
+                if (isNaN(taskDueDate.getTime())) {
+                  taskDueDate = new Date();
+                }
+              } catch (error) {
+                taskDueDate = new Date();
+              }
+              
               const status = getTaskStatus(task);
-              const categoryInfo = getCategoryInfo(task.category);
-              const dueDate = parseISO(task.dueDate);
+              const categoryInfo = getCategoryInfo(taskCategory);
               const currentDate = new Date();
-              // Compare dates without time to determine if task is overdue
-              const isOverdue = isBefore(endOfDay(dueDate), startOfDay(currentDate));
+              const isOverdue = isBefore(endOfDay(taskDueDate), startOfDay(currentDate));
+              
+              // Simplify class generation to avoid complex string manipulations
+              const cardClasses = [
+                'group h-full bg-white dark:bg-gray-800/90 rounded-lg',
+                'shadow-sm hover:shadow-lg',
+                'border border-gray-100 dark:border-gray-700/50',
+                'hover:border-blue-200 dark:hover:border-blue-600/50',
+                'relative overflow-hidden',
+                preventTaskSelection ? '' : 'cursor-pointer',
+                'transition-all duration-200',
+                'transform',
+                preventTaskSelection ? '' : 'hover:-translate-y-1',
+                'flex flex-col'
+              ];
+              
+              if (taskStatus === 'completed') {
+                cardClasses.push('opacity-80 hover:opacity-95');
+              } else if (isOverdue) {
+                cardClasses.push('border-l-[3px] border-l-red-500');
+              }
               
               return (
                 <div
-                  key={task.id}
+                  key={taskId}
                   onClick={() => {
-                    // Only allow task selection if not prevented
                     if (!preventTaskSelection) {
                       setSelectedTask(task);
                     }
                   }}
-                  className={`
-                    group h-full bg-white dark:bg-gray-800/90 rounded-lg
-                    shadow-sm hover:shadow-lg
-                    border border-gray-100 dark:border-gray-700/50
-                    hover:border-blue-200 dark:hover:border-blue-600/50
-                    relative overflow-hidden ${preventTaskSelection ? '' : 'cursor-pointer'}
-                    transition-all duration-200
-                    transform ${preventTaskSelection ? '' : 'hover:-translate-y-1'}
-                    flex flex-col
-                    ${task.status === 'completed' 
-                      ? 'opacity-80 hover:opacity-95' 
-                      : isOverdue
-                        ? 'border-l-[3px] border-l-red-500' 
-                        : ''
-                    }
-                  `}
+                  className={cardClasses.join(' ')}
                 >
                   <div className="p-4 flex-grow flex flex-col">
-                    {/* Header Section without Category Tag */}
+                    {/* Header Section */}
                     <div className="flex items-start mb-3">
                       <div className="flex items-start gap-2 min-w-0">
                         <h3 className={`
                           text-base font-semibold leading-tight truncate
-                          ${task.status === 'completed'
+                          ${taskStatus === 'completed'
                             ? 'text-gray-500 dark:text-gray-400 line-through'
                             : isOverdue
                               ? 'text-red-800 dark:text-red-300'
                               : 'text-gray-800 dark:text-gray-100'
                           }
                         `}>
-                          {task.name}
+                          {taskName}
                         </h3>
-                        {task.isAdminTask && (
+                        {taskIsAdmin && (
                           <div className="flex-shrink-0 p-0.5 mt-0.5">
                             <Crown className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400" />
                           </div>
@@ -497,14 +532,14 @@ export function UpcomingPage() {
                     {/* Description */}
                     <p className={`
                       text-sm leading-relaxed line-clamp-2 mb-4 flex-grow
-                      ${task.status === 'completed'
+                      ${taskStatus === 'completed'
                         ? 'text-gray-500 dark:text-gray-400'
                         : isOverdue
                           ? 'text-gray-700 dark:text-gray-300'
                           : 'text-gray-600 dark:text-gray-300'
                       }
                     `}>
-                      {task.description}
+                      {taskDescription}
                     </p>
 
                     {/* Footer Section */}
@@ -513,69 +548,49 @@ export function UpcomingPage() {
                       <div className="flex items-center gap-1.5">
                         <Calendar className={`
                           w-3.5 h-3.5
-                          ${isOverdue && !task.status 
+                          ${isOverdue && taskStatus !== 'completed'
                             ? 'text-red-500 dark:text-red-400' 
                             : 'text-gray-500 dark:text-gray-400'
                           }`} 
                         />
                         <span className={`
                           text-xs font-medium
-                          ${isOverdue && !task.status 
+                          ${isOverdue && taskStatus !== 'completed'
                             ? 'text-red-500 dark:text-red-400' 
                             : 'text-gray-500 dark:text-gray-400'
                           }`
                         }>
-                          Due: {format(dueDate, 'MMM d')}
+                          Due: {format(taskDueDate, 'MMM d')}
                         </span>
                       </div>
                       
                       {/* Status Badge and Category Tag */}
                       <div className="flex items-center gap-2">
                         {/* Status Badge - only show for Completed or Overdue */}
-                        {(task.status === 'completed' || isOverdue) && (
+                        {(taskStatus === 'completed' || isOverdue) && (
                           <span className={`
                             inline-flex items-center gap-1
                             px-2 py-0.5
                             text-[10px] font-medium
                             rounded-full
-                            ${task.status === 'completed'
+                            ${taskStatus === 'completed'
                               ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
                               : 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400'
                             }
-                            ${isOverdue && task.status !== 'completed' ? 'animate-pulse' : ''}
+                            ${isOverdue && taskStatus !== 'completed' ? 'animate-pulse' : ''}
                           `}>
                             {status.icon}
                             <span>{status.label}</span>
                           </span>
                         )}
                         
-                        {/* Category Tag - Professional Design */}
-                        <span className={`
-                          inline-flex items-center gap-1.5
-                          px-2.5 py-0.5
-                          text-[10px] font-medium tracking-wide
-                          rounded-md border
-                          ${categoryInfo.color.replace('bg-', 'bg-opacity-75 bg-').replace('text-', 'text-opacity-90 text-')}
-                          transition-all duration-200
-                          shadow-sm backdrop-blur-sm
-                          border-opacity-30
-                          ${categoryInfo.color.includes('blue') ? 'border-blue-200 dark:border-blue-700' :
-                            categoryInfo.color.includes('purple') ? 'border-purple-200 dark:border-purple-700' :
-                            categoryInfo.color.includes('emerald') ? 'border-emerald-200 dark:border-emerald-700' :
-                            categoryInfo.color.includes('indigo') ? 'border-indigo-200 dark:border-indigo-700' :
-                            categoryInfo.color.includes('green') ? 'border-green-200 dark:border-green-700' :
-                            categoryInfo.color.includes('red') ? 'border-red-200 dark:border-red-700' :
-                            categoryInfo.color.includes('yellow') ? 'border-yellow-200 dark:border-yellow-700' :
-                            categoryInfo.color.includes('amber') ? 'border-amber-200 dark:border-amber-700' :
-                            categoryInfo.color.includes('sky') ? 'border-sky-200 dark:border-sky-700' :
-                            'border-gray-200 dark:border-gray-700'}
-                          hover:shadow-md group-hover:shadow-md
-                        `}>
+                        {/* Category Tag - Simplified Design */}
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 text-[10px] font-medium tracking-wide rounded-md border bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300 border-gray-200 dark:border-gray-700 shadow-sm">
                           <div className="flex-shrink-0">
                             {categoryInfo.icon}
                           </div>
                           <span className="capitalize whitespace-nowrap">
-                            {task.category.replace('-', ' ')}
+                            {taskCategory.replace(/-/g, ' ')}
                           </span>
                         </span>
                       </div>

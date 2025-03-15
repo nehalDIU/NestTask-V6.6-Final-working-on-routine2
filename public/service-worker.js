@@ -1,90 +1,185 @@
 // Import Workbox from CDN (this makes the service worker self-contained)
 importScripts('https://storage.googleapis.com/workbox-cdn/releases/7.0.0/workbox-sw.js');
 
+// Cache version - increment when making significant changes
+const CACHE_VERSION = 'v2';
+
 // Workbox configuration
 if (workbox) {
   console.log('Workbox is loaded 🎉');
   
-  // Custom precache manifest
+  // Skip waiting and claim clients to ensure the newest service worker activates immediately
+  self.skipWaiting();
+  workbox.core.clientsClaim();
+  
+  // Custom precache manifest with versioned URLs
   workbox.precaching.precacheAndRoute([
-    { url: '/', revision: 'v1' },
-    { url: '/index.html', revision: 'v1' },
-    { url: '/offline.html', revision: 'v1' },
-    { url: '/manifest.json', revision: 'v1' },
-    { url: '/icons/icon-192x192.png', revision: 'v1' },
-    { url: '/icons/icon-512x512.png', revision: 'v1' },
-    { url: '/icons/add-task.png', revision: 'v1' },
-    { url: '/icons/view-tasks.png', revision: 'v1' }
+    { url: '/', revision: CACHE_VERSION },
+    { url: '/index.html', revision: CACHE_VERSION },
+    { url: '/offline.html', revision: CACHE_VERSION },
+    { url: '/manifest.json', revision: CACHE_VERSION },
+    { url: '/icons/icon-192x192.png', revision: CACHE_VERSION },
+    { url: '/icons/icon-512x512.png', revision: CACHE_VERSION },
+    { url: '/icons/add-task.png', revision: CACHE_VERSION },
+    { url: '/icons/view-tasks.png', revision: CACHE_VERSION }
   ]);
   
   // Helper function to check for unsupported schemes
   const isValidUrl = (url) => {
-    const invalidSchemes = ['chrome-extension:', 'about:', 'data:'];
-    return !invalidSchemes.some(scheme => url.startsWith(scheme));
+    // Check if the URL is valid before attempting to cache
+    if (!url || typeof url !== 'string') {
+      return false;
+    }
+    
+    // List of schemes that should not be cached
+    const invalidSchemes = [
+      'chrome-extension:', 
+      'chrome:', 
+      'about:', 
+      'data:', 
+      'file:', 
+      'blob:', 
+      'moz-extension:'
+    ];
+    
+    // Make sure we're checking a proper URL string
+    try {
+      // Some URLs might be passed as URL objects, so we get the href
+      const urlString = typeof url === 'object' && url.href ? url.href : url;
+      return !invalidSchemes.some(scheme => urlString.startsWith(scheme));
+    } catch (error) {
+      console.error('Error validating URL:', error, url);
+      return false;
+    }
   };
   
   // Cache CSS, JS, and Web Fonts with a stale-while-revalidate strategy
   workbox.routing.registerRoute(
-    ({ request, url }) => 
-      (request.destination === 'style' || 
-       request.destination === 'script' || 
-       request.destination === 'font') && 
-      isValidUrl(url.href),
+    ({ request, url }) => {
+      // First check if the URL is valid before proceeding
+      if (!isValidUrl(url.href)) {
+        return false;
+      }
+      
+      return request.destination === 'style' || 
+             request.destination === 'script' || 
+             request.destination === 'font';
+    },
     new workbox.strategies.StaleWhileRevalidate({
-      cacheName: 'static-resources',
+      cacheName: `static-resources-${CACHE_VERSION}`,
       plugins: [
         new workbox.expiration.ExpirationPlugin({
           maxEntries: 60,
           maxAgeSeconds: 30 * 24 * 60 * 60, // 30 days
+          purgeOnQuotaError: true, // Automatically purge if quota is exceeded
+        }),
+        // Add cache header plugin to respect Cache-Control headers
+        new workbox.cacheableResponse.CacheableResponsePlugin({
+          statuses: [0, 200],
         }),
       ],
     })
   );
   
-  // Cache images with a cache-first strategy
+  // Cache images with a cache-first strategy for better performance
   workbox.routing.registerRoute(
-    ({ request, url }) => 
-      request.destination === 'image' && 
-      isValidUrl(url.href),
+    ({ request, url }) => {
+      // First check if the URL is valid before proceeding
+      if (!isValidUrl(url.href)) {
+        return false;
+      }
+      
+      return request.destination === 'image';
+    },
     new workbox.strategies.CacheFirst({
-      cacheName: 'images',
+      cacheName: `images-${CACHE_VERSION}`,
       plugins: [
         new workbox.expiration.ExpirationPlugin({
           maxEntries: 60,
           maxAgeSeconds: 30 * 24 * 60 * 60, // 30 days
+          purgeOnQuotaError: true,
+        }),
+        new workbox.cacheableResponse.CacheableResponsePlugin({
+          statuses: [0, 200],
         }),
       ],
     })
   );
   
-  // Special handling for API requests
+  // API requests - NetworkFirst with fallback
   workbox.routing.registerRoute(
-    ({ url }) => (url.pathname.startsWith('/api') || 
-                 url.pathname.includes('supabase')) && 
-                 isValidUrl(url.href),
+    ({ url }) => {
+      // First check if the URL is valid before proceeding
+      if (!isValidUrl(url.href)) {
+        return false;
+      }
+      
+      return url.pathname.startsWith('/api') || url.pathname.includes('supabase');
+    },
     new workbox.strategies.NetworkFirst({
-      cacheName: 'api-responses',
+      cacheName: `api-responses-${CACHE_VERSION}`,
       plugins: [
         new workbox.expiration.ExpirationPlugin({
           maxEntries: 50,
           maxAgeSeconds: 24 * 60 * 60, // 1 day
+          purgeOnQuotaError: true,
+        }),
+        new workbox.cacheableResponse.CacheableResponsePlugin({
+          statuses: [0, 200],
+        }),
+      ],
+      networkTimeoutSeconds: 3, // Timeout for network requests
+    })
+  );
+  
+  // Routine data - StaleWhileRevalidate with longer cache
+  workbox.routing.registerRoute(
+    ({ url }) => { 
+      // First check if the URL is valid before proceeding
+      if (!isValidUrl(url.href)) {
+        return false;
+      }
+      
+      return url.pathname.includes('/routines') || url.pathname.includes('/routine_slots');
+    },
+    new workbox.strategies.StaleWhileRevalidate({
+      cacheName: `routine-data-${CACHE_VERSION}`,
+      plugins: [
+        new workbox.expiration.ExpirationPlugin({
+          maxEntries: 20,
+          maxAgeSeconds: 7 * 24 * 60 * 60, // 7 days
+          purgeOnQuotaError: true,
+        }),
+        new workbox.cacheableResponse.CacheableResponsePlugin({
+          statuses: [0, 200],
         }),
       ],
     })
   );
   
-  // Special route for routine-related API requests (to ensure they work offline)
+  // Faster assets cache - use CacheFirst for third-party libraries and fonts
   workbox.routing.registerRoute(
-    ({ url }) => 
-      (url.pathname.includes('/routines') || 
-       url.pathname.includes('/routine_slots')) && 
-      isValidUrl(url.href),
-    new workbox.strategies.StaleWhileRevalidate({
-      cacheName: 'routine-data',
+    ({ url }) => {
+      // First check if the URL is valid before proceeding
+      if (!isValidUrl(url.href)) {
+        return false;
+      }
+      
+      return url.href.includes('fonts.googleapis.com') || 
+             url.href.includes('cdn') || 
+             url.href.includes('unpkg.com') || 
+             url.href.includes('jsdelivr.net');
+    },
+    new workbox.strategies.CacheFirst({
+      cacheName: `external-resources-${CACHE_VERSION}`,
       plugins: [
         new workbox.expiration.ExpirationPlugin({
-          maxEntries: 20,
-          maxAgeSeconds: 7 * 24 * 60 * 60, // 7 days
+          maxEntries: 30,
+          maxAgeSeconds: 60 * 24 * 60 * 60, // 60 days
+          purgeOnQuotaError: true,
+        }),
+        new workbox.cacheableResponse.CacheableResponsePlugin({
+          statuses: [0, 200],
         }),
       ],
     })
@@ -92,28 +187,54 @@ if (workbox) {
   
   // Fallback to offline page for navigation requests that fail
   workbox.routing.setCatchHandler(({ event }) => {
+    // Only handle document (HTML) navigation requests
     if (event.request.destination === 'document') {
       return caches.match('/offline.html');
     }
+    
+    // For other requests that fail, return an error response
     return Response.error();
+  });
+  
+  // Clean up old caches when a new service worker activates
+  self.addEventListener('activate', (event) => {
+    event.waitUntil(
+      caches.keys().then((cacheNames) => {
+        return Promise.all(
+          cacheNames.map((cacheName) => {
+            // Delete any cache that doesn't include the current version
+            if (!cacheName.includes(CACHE_VERSION)) {
+              console.log('Deleting old cache:', cacheName);
+              return caches.delete(cacheName);
+            }
+          })
+        );
+      })
+    );
   });
   
 } else {
   console.log('Workbox failed to load 😢');
 }
 
-// Network state change detection
+// Network state change detection - optimized to reduce overhead
 self.addEventListener('fetch', event => {
-  // Skip non-http/https URLs (like chrome-extension://)
-  if (!event.request.url.startsWith('http')) {
+  // Skip non-http/https URLs and non-navigation requests
+  if (!event.request.url.startsWith('http') || event.request.mode !== 'navigate') {
     return;
   }
   
-  if (event.request.mode === 'navigate') {
-    event.respondWith(
-      fetch(event.request)
-        .then(response => {
-          // Connection is back - broadcast a message
+  // Skip URLs with invalid schemes
+  if (!isValidUrl(event.request.url)) {
+    return;
+  }
+  
+  event.respondWith(
+    fetch(event.request)
+      .then(response => {
+        // Connection is back - broadcast a message only if status changed
+        if (!self.isOnline) {
+          self.isOnline = true;
           self.clients.matchAll().then(clients => {
             clients.forEach(client => {
               client.postMessage({
@@ -122,10 +243,13 @@ self.addEventListener('fetch', event => {
               });
             });
           });
-          return response;
-        })
-        .catch(() => {
-          // Network is down - broadcast a message
+        }
+        return response;
+      })
+      .catch(() => {
+        // Network is down - broadcast a message only if status changed
+        if (self.isOnline !== false) {
+          self.isOnline = false;
           self.clients.matchAll().then(clients => {
             clients.forEach(client => {
               client.postMessage({
@@ -134,11 +258,11 @@ self.addEventListener('fetch', event => {
               });
             });
           });
-          
-          return caches.match('/offline.html');
-        })
-    );
-  }
+        }
+        
+        return caches.match('/offline.html');
+      })
+  );
 });
 
 // Background sync for deferred operations

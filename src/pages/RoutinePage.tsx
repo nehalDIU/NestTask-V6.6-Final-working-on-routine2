@@ -346,8 +346,8 @@ export function RoutinePage() {
 
                   {/* Content Column */}
                   <div className="flex-1 p-3 sm:p-5 md:p-8">
-                    <h3 className="text-base sm:text-xl md:text-2xl font-medium text-slate-600 dark:text-slate-300 mb-2 sm:mb-4 md:mb-6">
-                      {slot.courseName || (slot.course ? slot.course.name : 'No Course Name')}
+                    <h3 className="text-sm sm:text-base md:text-lg font-semibold mb-2 text-gray-900 dark:text-white">
+                      {slot.courseName || (slot.course?.name ? slot.course.name : 'No Course Name')}
                     </h3>
                     
                     <div className="space-y-2 sm:space-y-3 md:space-y-4">
@@ -372,9 +372,13 @@ export function RoutinePage() {
                                 setSelectedTeacher(fullTeacher || null);
                               }}
                               className="text-indigo-500 dark:text-indigo-400 hover:text-indigo-600 dark:hover:text-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 rounded"
-                              title={slot.teacherName || (slot.teacher ? slot.teacher.name : 'N/A')}
+                              title={slot.teacherName || (slot.teacher?.name ? slot.teacher.name : 'N/A')}
                             >
-                              {getInitials(slot.teacherName || (slot.teacher ? slot.teacher.name : undefined))}
+                              {typeof slot.teacherName === 'string' && slot.teacherName 
+                                ? getInitials(slot.teacherName) 
+                                : typeof slot.teacher?.name === 'string' && slot.teacher.name 
+                                  ? getInitials(slot.teacher.name)
+                                  : 'N/A'}
                             </button>
                           ) : (
                             'N/A'

@@ -10,6 +10,36 @@ import {
 } from '../utils/offlineUtils';
 import type { Task, NewTask } from '../types/task';
 
+// Type guard to validate task data
+function isValidTask(task: any): task is Task {
+  return (
+    task !== null &&
+    typeof task === 'object' &&
+    typeof task.id === 'string' &&
+    typeof task.name === 'string' &&
+    typeof task.dueDate === 'string' &&
+    typeof task.category === 'string' &&
+    typeof task.status === 'string'
+  );
+}
+
+// Helper function to sanitize task data
+function sanitizeTask(task: any): Task {
+  // Create a base valid task with defaults
+  const sanitized: Task = {
+    id: typeof task.id === 'string' ? task.id : `fallback_${Date.now()}`,
+    name: typeof task.name === 'string' ? task.name : 'Untitled Task',
+    category: typeof task.category === 'string' ? task.category : 'task',
+    dueDate: typeof task.dueDate === 'string' ? task.dueDate : new Date().toISOString(),
+    description: typeof task.description === 'string' ? task.description : '',
+    status: typeof task.status === 'string' ? task.status : 'my-tasks',
+    createdAt: typeof task.createdAt === 'string' ? task.createdAt : new Date().toISOString(),
+    isAdminTask: !!task.isAdminTask
+  };
+  
+  return sanitized;
+}
+
 export function useTasks(userId: string | undefined) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
@@ -77,12 +107,18 @@ export function useTasks(userId: string | undefined) {
             throw new Error('Unable to connect to database');
           }
 
-          const data = await fetchTasks(userId);
-          setTasks(data);
+          const rawData = await fetchTasks(userId);
+          
+          // Validate and sanitize data before setting state
+          const validatedData = Array.isArray(rawData) 
+            ? rawData.map(task => isValidTask(task) ? task : sanitizeTask(task))
+            : [];
+            
+          setTasks(validatedData);
           
           // Store the tasks locally for offline use
           try {
-            await saveTasksLocally(data);
+            await saveTasksLocally(validatedData);
           } catch (saveError) {
             console.error('Failed to save tasks locally:', saveError);
             // Continue anyway as this is a non-critical operation
@@ -92,10 +128,16 @@ export function useTasks(userId: string | undefined) {
           
           // If server fetch fails, try to load from offline storage
           try {
-            const localTasks = await getLocalTasks();
-            if (localTasks && localTasks.length > 0) {
+            const localRawTasks = await getLocalTasks();
+            if (localRawTasks && localRawTasks.length > 0) {
               console.log('Using locally cached tasks');
-              setTasks(localTasks);
+              
+              // Validate and sanitize local data before setting state
+              const validatedLocalTasks = localRawTasks.map(task => 
+                isValidTask(task) ? task : sanitizeTask(task)
+              );
+              
+              setTasks(validatedLocalTasks);
             } else {
               setError(err.message || 'Failed to load tasks');
               
@@ -115,10 +157,16 @@ export function useTasks(userId: string | undefined) {
       } else {
         // We're offline, load from local storage
         try {
-          const localTasks = await getLocalTasks();
-          if (localTasks && localTasks.length > 0) {
+          const localRawTasks = await getLocalTasks();
+          if (localRawTasks && localRawTasks.length > 0) {
             console.log('Using locally cached tasks (offline mode)');
-            setTasks(localTasks);
+            
+            // Validate and sanitize local data
+            const validatedLocalTasks = localRawTasks.map(task => 
+              isValidTask(task) ? task : sanitizeTask(task)
+            );
+            
+            setTasks(validatedLocalTasks);
           } else {
             setError('You are offline and no cached tasks are available');
           }

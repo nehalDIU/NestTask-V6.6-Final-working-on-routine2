@@ -1,27 +1,91 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, lazy, Suspense } from 'react';
 import { useAuth } from './hooks/useAuth';
 import { useTasks } from './hooks/useTasks';
 import { useUsers } from './hooks/useUsers';
 import { useNotifications } from './hooks/useNotifications';
 import { AuthPage } from './pages/AuthPage';
-import { AdminDashboard } from './pages/AdminDashboard';
 import { Navigation } from './components/Navigation';
 import { TaskList } from './components/TaskList';
 import { BottomNavigation } from './components/BottomNavigation';
-import { UpcomingPage } from './pages/UpcomingPage';
-import { SearchPage } from './pages/SearchPage';
-import { NotificationsPage } from './pages/NotificationsPage';
-import { CoursePage } from './pages/CoursePage';
-import { StudyMaterialsPage } from './pages/StudyMaterialsPage';
-import { RoutinePage } from './pages/RoutinePage'; // Import RoutinePage
 import { NotificationPanel } from './components/notifications/NotificationPanel';
 import { LoadingScreen } from './components/LoadingScreen';
 import { InstallPWA } from './components/InstallPWA';
 import { ListTodo, CheckCircle2, Clock, AlertCircle } from 'lucide-react';
 import { TaskCategories } from './components/task/TaskCategories';
 import { isOverdue, isSameDay } from './utils/dateUtils';
+import { LazyWrapper } from './components/lazy/LazyWrapper';
 import type { NavPage } from './types/navigation';
-import type { TaskCategory } from './types';
+import type { TaskCategory, Task } from './types';
+import { ComponentType } from 'react';
+
+// Import Notification from hooks where it's defined
+import type { Notification } from './hooks/useNotifications';
+
+// Define wrapper for component imports to match LazyWrapper interface
+const wrapNamedImport = <P extends object>(importPromise: Promise<any>, exportName: string): Promise<{ default: ComponentType<P> }> => {
+  return importPromise.then(module => ({
+    default: module[exportName] as ComponentType<P>
+  }));
+};
+
+// Define interfaces for each component's props
+interface SearchPageProps { tasks: Task[]; }
+interface NotificationsPageProps { 
+  notifications: Notification[]; 
+  onMarkAsRead: (id: string) => void;
+  onMarkAllAsRead: () => void;
+  onClear: (id: string) => void;
+}
+
+// Create lazy-loadable components with proper error handling
+const UpcomingPage = () => (
+  <LazyWrapper 
+    componentImport={() => wrapNamedImport<{}>(import('./pages/UpcomingPage'), 'UpcomingPage')}
+    fallback={<LoadingScreen />} 
+  />
+);
+
+const SearchPageWithProps = (props: SearchPageProps) => (
+  <LazyWrapper 
+    componentImport={() => wrapNamedImport<SearchPageProps>(import('./pages/SearchPage'), 'SearchPage')}
+    fallback={<LoadingScreen />} 
+  />
+);
+
+const NotificationsPageWithProps = (props: NotificationsPageProps) => (
+  <LazyWrapper 
+    componentImport={() => wrapNamedImport<NotificationsPageProps>(import('./pages/NotificationsPage'), 'NotificationsPage')}
+    fallback={<LoadingScreen />} 
+  />
+);
+
+const CoursePage = () => (
+  <LazyWrapper 
+    componentImport={() => wrapNamedImport<{}>(import('./pages/CoursePage'), 'CoursePage')}
+    fallback={<LoadingScreen />} 
+  />
+);
+
+const StudyMaterialsPage = () => (
+  <LazyWrapper 
+    componentImport={() => wrapNamedImport<{}>(import('./pages/StudyMaterialsPage'), 'StudyMaterialsPage')}
+    fallback={<LoadingScreen />} 
+  />
+);
+
+const RoutinePage = () => (
+  <LazyWrapper 
+    componentImport={() => wrapNamedImport<{}>(import('./pages/RoutinePage'), 'RoutinePage')}
+    fallback={<LoadingScreen />} 
+  />
+);
+
+const AdminDashboardPage = () => (
+  <LazyWrapper 
+    componentImport={() => wrapNamedImport<{}>(import('./pages/AdminDashboard'), 'AdminDashboard')}
+    fallback={<LoadingScreen />} 
+  />
+);
 
 type StatFilter = 'all' | 'overdue' | 'in-progress' | 'completed';
 
@@ -94,15 +158,9 @@ export default function App() {
 
   if (user.role === 'admin') {
     return (
-      <AdminDashboard
-        users={users}
-        tasks={tasks}
-        onLogout={logout}
-        onDeleteUser={() => {}}
-        onCreateTask={createTask}
-        onDeleteTask={deleteTask}
-        onUpdateTask={updateTask}
-      />
+      <Suspense fallback={<LoadingScreen />}>
+        <AdminDashboardPage />
+      </Suspense>
     );
   }
 
@@ -156,14 +214,16 @@ export default function App() {
   };
 
   const renderContent = () => {
+    const filteredTasks = getFilteredTasks();
+    
     switch (activePage) {
       case 'upcoming':
-        return <UpcomingPage tasks={tasks} />;
+        return <UpcomingPage />;
       case 'search':
-        return <SearchPage tasks={tasks} />;
+        return <SearchPageWithProps tasks={filteredTasks} />;
       case 'notifications':
         return (
-          <NotificationsPage
+          <NotificationsPageWithProps
             notifications={notifications}
             onMarkAsRead={markAsRead}
             onMarkAllAsRead={markAllAsRead}
@@ -286,7 +346,7 @@ export default function App() {
                 )}
               </div>
               <TaskList
-                tasks={getFilteredTasks()}
+                tasks={filteredTasks}
                 showDeleteButton={false}
               />
             </div>

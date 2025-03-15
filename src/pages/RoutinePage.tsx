@@ -17,9 +17,7 @@ import {
   User,
   Info,
   Code,
-  ExternalLink,
-  Wifi,
-  WifiOff
+  ExternalLink
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { TeacherDetailsModal } from './TeacherDetailsModal';
@@ -27,7 +25,7 @@ import type { Teacher } from '../types/teacher';
 import { getInitials } from '../utils/stringUtils';
 
 export function RoutinePage() {
-  const { routines, loading, offline } = useRoutines();
+  const { routines, loading } = useRoutines();
   const { courses } = useCourses();
   const { teachers } = useTeachers();
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -133,44 +131,53 @@ export function RoutinePage() {
   }
 
   return (
-    <div className="pb-8">
-      {/* Offline Indicator */}
-      {offline && (
-        <div className="bg-amber-100 dark:bg-amber-900 mb-6 p-3 rounded-lg flex items-center gap-3">
-          <WifiOff className="w-5 h-5 text-amber-600 dark:text-amber-400" />
-          <div className="text-sm text-amber-700 dark:text-amber-300">
-            You're viewing offline data. Some features may be limited.
-          </div>
-        </div>
-      )}
-
-      {/* Mobile header */}
-      <div className="block md:hidden">
-        <div className="flex items-center justify-between gap-4 mb-4">
-          <h1 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-            <Calendar className="w-6 h-6 text-blue-600 dark:text-blue-400" />
-            Class Routine
-            {offline && (
-              <span className="flex items-center ml-2 text-xs font-normal text-amber-600 dark:text-amber-400">
-                <WifiOff className="w-3 h-3 mr-1" />
-                Offline
-              </span>
-            )}
-          </h1>
-          <button 
-            onClick={() => setShowMobileSearch(prev => !prev)}
-            className="p-2 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 rounded-lg"
-          >
-            <Search className="w-5 h-5" />
-          </button>
-        </div>
-        
-        <div className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-          {currentRoutine.name} - {currentRoutine.semester}
-        </div>
-
+    <div className="max-w-7xl mx-auto px-3 sm:px-4 py-4 sm:py-8">
+      {/* Header Section */}
+      <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg mb-4 sm:mb-6 p-3 sm:p-4 shadow-sm">
         {/* Mobile View Header */}
-        <div className="flex flex-col space-y-3">
+        <div className="flex flex-col space-y-3 md:hidden">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Calendar className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600 dark:text-blue-400" />
+              <h1 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white">Class Routine</h1>
+            </div>
+            
+            <button 
+              onClick={() => setShowMobileSearch(!showMobileSearch)}
+              className="p-2 bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600"
+              aria-label={showMobileSearch ? "Hide search" : "Show search"}
+            >
+              <Search className="w-5 h-5 text-gray-500 dark:text-gray-400" />
+            </button>
+          </div>
+          
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            {currentRoutine.name} - {currentRoutine.semester}
+          </p>
+          
+          {/* Mobile Search Input (toggle visibility with state) */}
+          <AnimatePresence>
+            {showMobileSearch && (
+              <motion.div 
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="overflow-hidden"
+              >
+                <div className="relative mt-2">
+                  <input
+                    type="text"
+                    placeholder="Search courses, teachers, rooms..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 border dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white text-sm"
+                  />
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+          
           {sections.length > 0 && (
             <div className="relative mt-1">
               <select
@@ -188,53 +195,47 @@ export function RoutinePage() {
             </div>
           )}
         </div>
-      </div>
 
-      {/* Desktop header with routines, search, and filters */}
-      <div className="hidden md:flex md:flex-row md:flex-wrap md:items-center md:justify-between gap-y-4">
-        <div>
-          <h1 className="text-xl lg:text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-            <Calendar className="w-6 h-6 lg:w-7 lg:h-7 text-blue-600 dark:text-blue-400" />
-            Class Routine
-            {offline && (
-              <span className="flex items-center ml-2 text-xs font-normal text-amber-600 dark:text-amber-400">
-                <WifiOff className="w-3 h-3 mr-1" />
-                Offline
-              </span>
+        {/* Desktop View Header */}
+        <div className="hidden md:flex md:flex-row md:flex-wrap md:items-center md:justify-between gap-y-4">
+          <div>
+            <h1 className="text-xl lg:text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+              <Calendar className="w-6 h-6 lg:w-7 lg:h-7 text-blue-600 dark:text-blue-400" />
+              Class Routine
+            </h1>
+            <p className="text-sm lg:text-base text-gray-500 dark:text-gray-400 mt-1">
+              {currentRoutine.name} - {currentRoutine.semester}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3 flex-wrap">
+            {sections.length > 0 && (
+              <div className="relative">
+                <select
+                  value={selectedSection}
+                  onChange={(e) => setSelectedSection(e.target.value)}
+                  className="pl-10 pr-4 py-2 border dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white appearance-none"
+                >
+                  <option value="">All Sections</option>
+                  {sections.map(section => (
+                    <option key={section} value={section}>{section}</option>
+                  ))}
+                </select>
+                <Users className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                <ChevronRight className="absolute right-3 top-1/2 transform -translate-y-1/2 rotate-90 text-gray-400 w-4 h-4" />
+              </div>
             )}
-          </h1>
-          <p className="text-sm lg:text-base text-gray-500 dark:text-gray-400 mt-1">
-            {currentRoutine.name} - {currentRoutine.semester}
-          </p>
-        </div>
 
-        <div className="flex items-center gap-3 flex-wrap">
-          {sections.length > 0 && (
-            <div className="relative">
-              <select
-                value={selectedSection}
-                onChange={(e) => setSelectedSection(e.target.value)}
-                className="pl-10 pr-4 py-2 border dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white appearance-none"
-              >
-                <option value="">All Sections</option>
-                {sections.map(section => (
-                  <option key={section} value={section}>{section}</option>
-                ))}
-              </select>
-              <Users className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-              <ChevronRight className="absolute right-3 top-1/2 transform -translate-y-1/2 rotate-90 text-gray-400 w-4 h-4" />
+            <div className="relative w-full sm:w-auto sm:flex-grow">
+              <input
+                type="text"
+                placeholder="Search courses, teachers, rooms..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+              />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
             </div>
-          )}
-
-          <div className="relative w-full sm:w-auto sm:flex-grow">
-            <input
-              type="text"
-              placeholder="Search courses, teachers, rooms..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-            />
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
           </div>
         </div>
       </div>
@@ -346,8 +347,8 @@ export function RoutinePage() {
 
                   {/* Content Column */}
                   <div className="flex-1 p-3 sm:p-5 md:p-8">
-                    <h3 className="text-sm sm:text-base md:text-lg font-semibold mb-2 text-gray-900 dark:text-white">
-                      {slot.courseName || (slot.course?.name ? slot.course.name : 'No Course Name')}
+                    <h3 className="text-base sm:text-xl md:text-2xl font-medium text-slate-600 dark:text-slate-300 mb-2 sm:mb-4 md:mb-6">
+                      {slot.courseName || (slot.course ? slot.course.name : 'No Course Name')}
                     </h3>
                     
                     <div className="space-y-2 sm:space-y-3 md:space-y-4">
@@ -372,13 +373,9 @@ export function RoutinePage() {
                                 setSelectedTeacher(fullTeacher || null);
                               }}
                               className="text-indigo-500 dark:text-indigo-400 hover:text-indigo-600 dark:hover:text-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 rounded"
-                              title={slot.teacherName || (slot.teacher?.name ? slot.teacher.name : 'N/A')}
+                              title={slot.teacherName || (slot.teacher ? slot.teacher.name : 'N/A')}
                             >
-                              {typeof slot.teacherName === 'string' && slot.teacherName 
-                                ? getInitials(slot.teacherName) 
-                                : typeof slot.teacher?.name === 'string' && slot.teacher.name 
-                                  ? getInitials(slot.teacher.name)
-                                  : 'N/A'}
+                              {getInitials(slot.teacherName || (slot.teacher ? slot.teacher.name : undefined))}
                             </button>
                           ) : (
                             'N/A'

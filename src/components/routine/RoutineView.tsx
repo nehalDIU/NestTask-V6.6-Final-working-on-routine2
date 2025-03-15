@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, memo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useRoutines } from '../../hooks/useRoutines';
 import { useCourses } from '../../hooks/useCourses';
 import { useTeachers } from '../../hooks/useTeachers';
@@ -22,9 +22,8 @@ import { TeacherDetailsModal } from './TeacherDetailsModal';
 import type { Teacher } from '../../types/teacher';
 import { getInitials } from '../../utils/stringUtils';
 
-// Memoize the component for better performance
-export const RoutineView = memo(function RoutineView() {
-  const { routines, loading, offline } = useRoutines();
+export function RoutineView() {
+  const { routines, loading } = useRoutines();
   const { courses } = useCourses();
   const { teachers } = useTeachers();
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -34,12 +33,8 @@ export const RoutineView = memo(function RoutineView() {
   const [enrichedSlots, setEnrichedSlots] = useState<any[]>([]);
   const [isMobileSearchVisible, setIsMobileSearchVisible] = useState(false);
 
-  const currentRoutine = useMemo(() => 
-    routines.find(r => r.isActive) || routines[0], 
-    [routines]
-  );
+  const currentRoutine = routines.find(r => r.isActive) || routines[0];
 
-  // Optimize expensive calculations with useMemo
   const weekDays = useMemo(() => {
     const start = startOfWeek(selectedDate, { weekStartsOn: 6 });
     return Array.from({ length: 6 }, (_, i) => {
@@ -60,50 +55,41 @@ export const RoutineView = memo(function RoutineView() {
       return;
     }
 
-    console.debug("Teachers available for RoutineView:", teachers.length);
+    console.log("Teachers available for RoutineView:", teachers.length);
 
     const enriched = currentRoutine.slots.map(slot => {
       const course = slot.courseId ? courses.find(c => c.id === slot.courseId) : undefined;
       const teacher = slot.teacherId ? teachers.find(t => t.id === slot.teacherId) : undefined;
       
+      // Log teacher details for debugging
+      console.log(`RoutineView - Slot ${slot.id} - teacherId: ${slot.teacherId}, teacherName: ${slot.teacherName}, Found teacher:`, teacher?.name || "null");
+      
       // If courseName isn't set but we have a course, populate it
       const courseName = slot.courseName || (course ? course.name : undefined);
-      // Use directly stored teacherName with fallback to teacher.name
+      // Add teacherName for direct access (use slot.teacherName if available)
       const teacherName = slot.teacherName || (teacher ? teacher.name : undefined);
       
       return {
         ...slot,
         course,
         teacher,
-        courseName: courseName || '',
-        teacherName: teacherName || ''
+        courseName,
+        teacherName
       };
     });
 
     setEnrichedSlots(enriched);
   }, [currentRoutine, courses, teachers]);
 
-  // Optimize expensive filtering with useMemo
   const filteredSlots = useMemo(() => {
-    if (!enrichedSlots.length) return [];
-    
     return enrichedSlots.filter(slot => {
-      // Handle potential undefined values safely
-      const courseNameLower = typeof slot.course?.name === 'string' ? slot.course.name.toLowerCase() : '';
-      const courseCodeLower = typeof slot.course?.code === 'string' ? slot.course.code.toLowerCase() : '';
-      const roomNumberLower = typeof slot.roomNumber === 'string' ? slot.roomNumber.toLowerCase() : '';
-      const teacherNameLower = typeof slot.teacher?.name === 'string' ? slot.teacher.name.toLowerCase() : '';
-      const searchTermLower = searchTerm.toLowerCase();
-      
-      const matchesSearch = !searchTerm || 
-        courseNameLower.includes(searchTermLower) ||
-        courseCodeLower.includes(searchTermLower) ||
-        roomNumberLower.includes(searchTermLower) ||
-        teacherNameLower.includes(searchTermLower);
+      const matchesSearch = searchTerm === '' || 
+        slot.course?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        slot.course?.code?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        slot.roomNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        slot.teacher?.name?.toLowerCase().includes(searchTerm.toLowerCase());
       
       const matchesSection = !selectedSection || slot.section === selectedSection;
-      
-      // Show only slots for the exactly selected day
       const matchesDay = format(selectedDate, 'EEEE') === slot.dayOfWeek;
       
       return matchesSearch && matchesSection && matchesDay;
@@ -139,92 +125,6 @@ export const RoutineView = memo(function RoutineView() {
       </div>
     );
   }
-
-  // Memoize the class schedule rendering to prevent unnecessary re-renders
-  const classSchedule = useMemo(() => {
-    if (filteredSlots.length === 0) {
-      return (
-        <div className="text-center py-8 sm:py-12 bg-white dark:bg-gray-800 rounded-xl shadow-sm">
-          <Clock className="w-10 h-10 sm:w-12 sm:h-12 text-gray-400 dark:text-gray-500 mx-auto mb-3 sm:mb-4" />
-          <h3 className="text-base sm:text-lg font-medium text-gray-900 dark:text-white mb-1 sm:mb-2">
-            No Classes Scheduled
-          </h3>
-          <p className="text-sm sm:text-base text-gray-500 dark:text-gray-400 px-4">
-            There are no classes scheduled for this day
-            {selectedSection && ` in section ${selectedSection}`}
-            {searchTerm && ` matching "${searchTerm}"`}.
-          </p>
-        </div>
-      );
-    }
-    
-    return filteredSlots
-      .sort((a, b) => a.startTime.localeCompare(b.startTime))
-      .map((slot) => (
-        <motion.div
-          key={slot.id}
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-white dark:bg-gray-800 rounded-md overflow-hidden shadow-sm hover:shadow-md transition-all duration-300 border border-gray-100 dark:border-gray-700/50"
-        >
-          <div className="flex flex-col sm:flex-row items-stretch">
-            {/* Time Column */}
-            <div className="w-full sm:w-[80px] md:w-[100px] bg-gray-100 dark:bg-gray-700 flex flex-row sm:flex-col justify-between sm:justify-center items-center p-2 sm:p-3 md:p-4">
-              <div className="text-base sm:text-lg md:text-xl font-semibold text-gray-700 dark:text-gray-200">
-                {format(new Date(`2000-01-01T${slot.startTime}`), 'HH:mm')}
-              </div>
-              <div className="flex items-center justify-center w-8 sm:h-4 sm:mt-1 sm:mb-1">
-                <div className="w-6 border-t border-gray-300 dark:border-gray-600 sm:w-10"></div>
-              </div>
-              <div className="text-base sm:text-lg md:text-xl font-semibold text-gray-700 dark:text-gray-200">
-                {format(new Date(`2000-01-01T${slot.endTime}`), 'HH:mm')}
-              </div>
-            </div>
-
-            {/* Content Column */}
-            <div className="flex-1 p-2 sm:p-3 md:p-4">
-              <h3 className="text-sm sm:text-base md:text-lg font-semibold mb-1.5">
-                {slot.courseName || (slot.course?.name ? slot.course.name : 'No Course Name')}
-              </h3>
-              
-              <div className="grid grid-cols-2 gap-y-0.5 text-xs sm:text-sm">
-                <div className="text-gray-500 dark:text-gray-400">Course:</div>
-                <div className="text-right">{slot.course?.code || 'N/A'}</div>
-                
-                <div className="text-gray-500 dark:text-gray-400">Section:</div>
-                <div className="text-right">{slot.section || 'N/A'}</div>
-                
-                <div className="text-gray-500 dark:text-gray-400">Teacher:</div>
-                <div className="text-right">
-                  {slot.teacherId ? (
-                    <button 
-                      onClick={() => {
-                        // Find the full teacher object for modal display
-                        const fullTeacher = teachers.find(t => t.id === slot.teacherId);
-                        setSelectedTeacher(fullTeacher || null);
-                      }} 
-                      className="text-blue-500 hover:underline"
-                      title={slot.teacherName || (slot.teacher?.name ? slot.teacher.name : 'N/A')}
-                    >
-                      {typeof slot.teacherName === 'string' && slot.teacherName 
-                        ? getInitials(slot.teacherName) 
-                        : typeof slot.teacher?.name === 'string' && slot.teacher.name 
-                          ? getInitials(slot.teacher.name)
-                          : 'N/A'}
-                    </button>
-                  ) : (
-                    'N/A'
-                  )}
-                </div>
-                
-                <div className="text-gray-500 dark:text-gray-400">Room:</div>
-                <div className="text-right">{slot.roomNumber || 'N/A'}</div>
-              </div>
-            </div>
-          </div>
-        </motion.div>
-      ));
-  }, [filteredSlots, selectedSection, searchTerm, teachers]);
 
   return (
     <div className="w-full max-w-7xl mx-auto px-1 sm:px-3 py-2 sm:py-4">
@@ -400,7 +300,82 @@ export const RoutineView = memo(function RoutineView() {
 
       {/* Class Schedule */}
       <div className="space-y-1.5 sm:space-y-2">
-        {classSchedule}
+        {filteredSlots.length === 0 ? (
+          <div className="text-center py-6 sm:py-8 bg-white dark:bg-gray-800 rounded-lg">
+            <Clock className="w-8 h-8 sm:w-10 sm:h-10 text-gray-400 dark:text-gray-500 mx-auto mb-2 sm:mb-3" />
+            <h3 className="text-sm sm:text-base font-medium text-gray-900 dark:text-white mb-1">
+              No Classes Scheduled
+            </h3>
+            <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 px-2 sm:px-4">
+              There are no classes scheduled for this day
+              {selectedSection && ` in section ${selectedSection}`}
+              {searchTerm && ` matching "${searchTerm}"`}.
+            </p>
+          </div>
+        ) : (
+          filteredSlots
+            .sort((a, b) => a.startTime.localeCompare(b.startTime))
+            .map((slot) => (
+              <motion.div
+                key={slot.id}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-white dark:bg-gray-800 rounded-md overflow-hidden shadow-sm hover:shadow-md transition-all duration-300 border border-gray-100 dark:border-gray-700/50"
+              >
+                <div className="flex flex-col sm:flex-row items-stretch">
+                  {/* Time Column */}
+                  <div className="w-full sm:w-[80px] md:w-[100px] bg-gray-100 dark:bg-gray-700 flex flex-row sm:flex-col justify-between sm:justify-center items-center p-2 sm:p-3 md:p-4">
+                    <div className="text-base sm:text-lg md:text-xl font-semibold text-gray-700 dark:text-gray-200">
+                      {format(new Date(`2000-01-01T${slot.startTime}`), 'HH:mm')}
+                    </div>
+                    <div className="flex items-center justify-center w-8 sm:h-4 sm:mt-1 sm:mb-1">
+                      <div className="w-6 border-t border-gray-300 dark:border-gray-600 sm:w-10"></div>
+                    </div>
+                    <div className="text-base sm:text-lg md:text-xl font-semibold text-gray-700 dark:text-gray-200">
+                      {format(new Date(`2000-01-01T${slot.endTime}`), 'HH:mm')}
+                    </div>
+                  </div>
+
+                  {/* Content Column */}
+                  <div className="flex-1 p-2 sm:p-3 md:p-4">
+                    <h3 className="text-sm sm:text-base md:text-lg font-semibold mb-1.5">
+                      {slot.courseName || (slot.course ? slot.course.name : 'No Course Name')}
+                    </h3>
+                    
+                    <div className="grid grid-cols-2 gap-y-0.5 text-xs sm:text-sm">
+                      <div className="text-gray-500 dark:text-gray-400">Course:</div>
+                      <div className="text-right">{slot.course?.code || 'N/A'}</div>
+                      
+                      <div className="text-gray-500 dark:text-gray-400">Section:</div>
+                      <div className="text-right">{slot.section || 'N/A'}</div>
+                      
+                      <div className="text-gray-500 dark:text-gray-400">Teacher:</div>
+                      <div className="text-right">
+                        {slot.teacherId ? (
+                          <button 
+                            onClick={() => {
+                              // Find the full teacher object for modal display
+                              const fullTeacher = teachers.find(t => t.id === slot.teacherId);
+                              setSelectedTeacher(fullTeacher || null);
+                            }} 
+                            className="text-blue-500 hover:underline"
+                            title={slot.teacherName || (slot.teacher ? slot.teacher.name : 'N/A')}
+                          >
+                            {getInitials(slot.teacherName || (slot.teacher ? slot.teacher.name : undefined))}
+                          </button>
+                        ) : (
+                          'N/A'
+                        )}
+                      </div>
+                      
+                      <div className="text-gray-500 dark:text-gray-400">Room:</div>
+                      <div className="text-right">{slot.roomNumber || 'N/A'}</div>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            ))
+        )}
       </div>
 
       {/* Teacher Details Modal */}
@@ -412,4 +387,4 @@ export const RoutineView = memo(function RoutineView() {
       )}
     </div>
   );
-});
+}

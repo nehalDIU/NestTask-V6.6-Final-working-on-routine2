@@ -490,8 +490,6 @@ export function MonthlyCalendar({ isOpen, onClose, selectedDate, onSelectDate, t
 
   // Separate handler for date selection with touch
   const handleDateTouchEnd = useCallback((date: Date, e: React.TouchEvent) => {
-    e.stopPropagation();
-    
     if (touchStartXRef.current !== null && touchStartYRef.current !== null) {
       const touchEndX = e.changedTouches[0].clientX;
       const touchEndY = e.changedTouches[0].clientY;
@@ -744,320 +742,332 @@ export function MonthlyCalendar({ isOpen, onClose, selectedDate, onSelectDate, t
 
   return (
     <AnimatePresence>
-      <motion.div
-        key="monthly-calendar-overlay"
-        variants={preferReducedMotion ? reducedMotionVariants : overlayAnimationVariants}
-        initial="hidden"
-        animate="visible"
-        exit="exit"
-        transition={transitionProps}
-        className="fixed inset-0 z-50 flex items-start justify-center pt-12 sm:pt-20 px-3 sm:px-4 bg-black/30 backdrop-blur-sm"
-        style={{ 
-          willChange: 'opacity, transform',
-          translateZ: 0,
-          backfaceVisibility: 'hidden'
-        }}
-      >
-        <div 
-          className="flex flex-col bg-white dark:bg-gray-800 rounded-lg shadow-xl overflow-hidden max-w-md w-full max-h-[80vh]"
-          ref={calendarRef}
-          role="dialog"
-          aria-modal="true"
-          aria-label="Monthly Calendar"
-          onClick={(e) => e.stopPropagation()}
-          onTouchStart={(e) => e.stopPropagation()}
-          onTouchMove={(e) => e.stopPropagation()}
-          onTouchEnd={(e) => e.stopPropagation()}
-          onKeyDown={handleContainerKeyDown}
-          tabIndex={0}
+      {isOpen && (
+        <motion.div
+          key="monthly-calendar-overlay"
+          variants={preferReducedMotion ? reducedMotionVariants : overlayAnimationVariants}
+          initial="hidden"
+          animate="visible"
+          exit="exit"
+          transition={transitionProps}
+          className="fixed inset-0 z-50 flex items-start justify-center pt-12 sm:pt-20 px-3 sm:px-4 bg-black/30 backdrop-blur-sm"
+          style={{ 
+            willChange: 'opacity, transform',
+            translateZ: 0,
+            backfaceVisibility: 'hidden'
+          }}
         >
-          {/* Calendar header with optimized rendering */}
-          <div className="flex justify-between items-center p-4 border-b border-gray-100 dark:border-gray-700">
-            <div className="flex-1">
-              <button 
-                onClick={handlePrevMonth}
-                className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                aria-label="Previous month"
-              >
-                <svg className="w-5 h-5 text-gray-600 dark:text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-                </svg>
-              </button>
-            </div>
-            
-            <button
-              onClick={toggleYearSelector}
-              className="flex-1 text-lg font-semibold text-gray-900 dark:text-white mx-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg py-1"
-              aria-label={`Current month and year: ${format(currentMonth, 'MMMM yyyy')}. Click to select year.`}
-            >
-              {format(currentMonth, 'MMMM yyyy')}
-            </button>
-            
-            <div className="flex-1 flex justify-end">
-              <button 
-                onClick={handleNextMonth}
-                className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                aria-label="Next month"
-              >
-                <svg className="w-5 h-5 text-gray-600 dark:text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                </svg>
-              </button>
-            </div>
-          </div>
-
-          {/* Calendar Legend - simplified for better performance */}
-          <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4 py-2 px-2 sm:px-4 text-xs text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-750">
-            <div className="flex items-center gap-1">
-              <div className="w-2 h-2 rounded-full bg-green-500"></div>
-              <span>Completed</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <div className="w-2 h-2 rounded-full bg-red-500"></div>
-              <span>Overdue</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <div className="w-2 h-2 rounded-full bg-blue-500"></div>
-              <span>In Progress</span>
-            </div>
-            {!isMobileRef.current && (
-              <div className="hidden sm:flex items-center text-[10px] gap-1 ml-2 text-gray-500 italic">
-                <span>Swipe or use arrow keys</span>
+          <div 
+            className="flex flex-col bg-white dark:bg-gray-800 rounded-lg shadow-xl overflow-hidden max-w-md w-full max-h-[80vh] touch-manipulation"
+            ref={calendarRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Monthly Calendar"
+            onClick={(e) => e.stopPropagation()}
+            onTouchStart={() => {
+              // No need to stop propagation here
+            }}
+            onTouchMove={() => {
+              // No need to stop propagation here
+            }}
+            onTouchEnd={() => {
+              // No need to stop propagation here
+            }}
+            onKeyDown={handleContainerKeyDown}
+            tabIndex={0}
+          >
+            {/* Calendar header with optimized rendering */}
+            <div className="flex justify-between items-center p-4 border-b border-gray-100 dark:border-gray-700">
+              <div className="flex-1">
+                <button 
+                  onClick={handlePrevMonth}
+                  className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                  aria-label="Previous month"
+                >
+                  <svg className="w-5 h-5 text-gray-600 dark:text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
               </div>
-            )}
-          </div>
-
-          {/* Year Selector View or Calendar View with optimized rendering */}
-          <AnimatePresence mode="wait">
-            {viewMode === 'year' ? (
-              <motion.div
-                key="year-selector"
-                initial={{ opacity: 0, y: -20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-                transition={{ duration: 0.12 }}
-                className="p-4 max-h-[250px] overflow-y-auto overscroll-contain"
+              
+              <button
+                onClick={toggleYearSelector}
+                className="flex-1 text-lg font-semibold text-gray-900 dark:text-white mx-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg py-1"
+                aria-label={`Current month and year: ${format(currentMonth, 'MMMM yyyy')}. Click to select year.`}
               >
-                <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-2">
-                  {years.map(year => (
-                    <button
-                      key={year}
-                      onClick={() => handleYearChange(year)}
-                      className={`
-                        py-2 rounded-md text-center transition-colors
-                        ${year === getYear(currentMonth)
-                          ? 'bg-blue-500 text-white font-medium'
-                          : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200'
-                        }
-                      `}
-                      aria-label={`${year}${year === getYear(currentMonth) ? ', selected' : ''}`}
-                      aria-selected={year === getYear(currentMonth)}
-                    >
-                      {year}
-                    </button>
-                  ))}
+                {format(currentMonth, 'MMMM yyyy')}
+              </button>
+              
+              <div className="flex-1 flex justify-end">
+                <button 
+                  onClick={handleNextMonth}
+                  className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                  aria-label="Next month"
+                >
+                  <svg className="w-5 h-5 text-gray-600 dark:text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            {/* Calendar Legend - simplified for better performance */}
+            <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4 py-2 px-2 sm:px-4 text-xs text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-750">
+              <div className="flex items-center gap-1">
+                <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                <span>Completed</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <div className="w-2 h-2 rounded-full bg-red-500"></div>
+                <span>Overdue</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                <span>In Progress</span>
+              </div>
+              {!isMobileRef.current && (
+                <div className="hidden sm:flex items-center text-[10px] gap-1 ml-2 text-gray-500 italic">
+                  <span>Swipe or use arrow keys</span>
                 </div>
-              </motion.div>
-            ) : (
-              <motion.div
-                key="calendar-view"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 20 }}
-                transition={{ duration: 0.12 }}
-                className="calendar-container overscroll-contain"
-                onTouchStart={(e) => {
-                  // Only handle touch events at container level if not on a button
-                  if (!(e.target as HTMLElement).closest('button')) {
-                    handleTouchStart(e);
-                  }
-                }}
-                onTouchMove={(e) => {
-                  // Allow move events for swipe detection at container level
-                  handleTouchMove(e);
-                }}
-                onTouchEnd={(e) => {
-                  // Only handle touch events at container level if not on a button
-                  if (!(e.target as HTMLElement).closest('button')) {
-                    handleTouchEnd(e);
-                  }
-                }}
-              >
-                {/* Calendar Grid - performance optimized */}
-                <div className="p-4">
-                  {/* Weekday Headers - static render for performance */}
-                  <div className="grid grid-cols-7 mb-3">
-                    {WEEKDAYS.map(day => (
-                      <div key={day} className="text-center text-xs font-medium text-gray-500 dark:text-gray-400">
-                        {day}
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Calendar Days - performance optimized grid */}
-                  <div className="grid grid-cols-7 gap-1 sm:gap-2 content-start">
-                    {calendarDays.map((date, index) => {
-                      if (!date) {
-                        // Empty cell for padding - render minimal content
-                        return <div key={`empty-${index}`} className="aspect-square"></div>;
-                      }
-                      
-                      // Get task summary using optimized function
-                      const summary = getTaskSummary(date);
-                      
-                      // Safely compare dates to avoid errors - with early calculation
-                      let isSelected = false;
-                      let isTodayDate = false;
-                      
-                      try {
-                        isSelected = isSameDayOptimized(date, selectedDate);
-                        isTodayDate = isToday(date);
-                      } catch (error) {
-                        // Silent error - performance optimization
-                      }
-                      
-                      const isFocused = focusedDateIndex === index;
-
-                      // Only optimize costly renders with React.memo if we had many calendar days
-                      return (
-                        <motion.button
-                          key={date.toISOString()}
-                          ref={el => {
-                            dayButtonsRef.current[index] = el;
-                          }}
-                          onClick={() => handleDateSelection(date)}
-                          onTouchStart={(e) => handleTouchStart(e)}
-                          onTouchMove={handleTouchMove}
-                          onTouchEnd={(e) => handleDateTouchEnd(date, e)}
-                          onMouseEnter={(e) => handleMouseEnter(date, e)}
-                          onMouseLeave={handleMouseLeave}
-                          onKeyDown={(e) => handleKeyDown(e, index)}
-                          tabIndex={isFocused ? 0 : -1}
-                          variants={dayCellHoverVariants}
-                          initial="initial"
-                          whileHover="hover"
-                          whileTap="tap"
-                          aria-label={`${format(date, 'MMMM d, yyyy')}${
-                            summary.total > 0 ? `, ${summary.total} tasks` : ''
-                          }${isSelected ? ', selected' : ''}${isTodayDate ? ', today' : ''}`}
-                          aria-selected={isSelected}
-                          aria-current={isTodayDate ? "date" : undefined}
-                          className={`
-                            relative aspect-square rounded-lg
-                            flex flex-col items-center justify-center gap-1
-                            ${isSelected
-                              ? 'bg-blue-600 text-white shadow-md z-10'
-                              : isTodayDate
-                              ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
-                              : summary.total > 0
-                              ? 'hover:bg-gray-100 dark:hover:bg-gray-700 bg-gray-50/70 dark:bg-gray-800/50'
-                              : 'hover:bg-gray-100 dark:hover:bg-gray-700'
-                            }
-                            ${isFocused 
-                              ? 'ring-2 ring-offset-2 ring-blue-500 dark:ring-offset-gray-800 z-10' 
-                              : ''
-                            }
-                            focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:focus:ring-offset-gray-800
-                          `}
-                        >
-                          {/* Date Number - simplified rendering */}
-                          <span className={`
-                            text-sm font-semibold 
-                            ${isSelected
-                              ? 'text-white'
-                              : isTodayDate
-                              ? 'text-blue-600 dark:text-blue-400'
-                              : 'text-gray-700 dark:text-gray-300'
-                            }
-                          `}>
-                            {format(date, 'd')}
-                          </span>
-                          
-                          {/* Task Status Indicators - conditionally rendered for performance */}
-                          {summary.total > 0 && !isSelected && (
-                            <div className={`
-                              flex items-center justify-center
-                              min-h-[6px] min-w-[6px]
-                              gap-[3px]
-                            `}>
-                              {summary.completed > 0 && (
-                                <div className="w-1.5 h-1.5 rounded-full bg-green-500/80 dark:bg-green-400/80 shadow-sm" />
-                              )}
-                              {summary.overdue > 0 && (
-                                <div className="w-1.5 h-1.5 rounded-full bg-red-500/80 dark:bg-red-400/80 shadow-sm animate-pulse" />
-                              )}
-                              {summary.inProgress > 0 && (
-                                <div className="w-1.5 h-1.5 rounded-full bg-blue-500/80 dark:bg-blue-400/80 shadow-sm" />
-                              )}
-                            </div>
-                          )}
-
-                          {/* Task count badge - optimized rendering only when needed */}
-                          {summary.total > 0 && (
-                            <motion.div 
-                              className={`absolute ${isSelected ? 'top-0 right-0 translate-x-1/3 -translate-y-1/3' : '-top-2 -right-2'} 
-                                min-w-[20px] h-[20px] rounded-full 
-                                ${isSelected ? 'bg-white text-blue-600' : 'bg-blue-700 text-white'} 
-                                text-[10px] font-semibold flex items-center justify-center px-1 shadow-md
-                                border-2 ${isSelected ? 'border-blue-600' : 'border-white dark:border-gray-800'}
-                                hover:scale-105 hover:shadow-md transition-transform duration-150
-                                `}
-                              variants={badgeAnimationVariants}
-                              initial="initial"
-                              animate="animate"
-                              key={`badge-${date.toISOString()}-${summary.total}`}
-                              style={{ willChange: 'transform, opacity' }}
-                            >
-                              {summary.total}
-                            </motion.div>
-                          )}
-                          
-                          {/* Selected/Today Indicator Ring - only rendered when needed */}
-                          {(isTodayDate && !isSelected) && (
-                            <div
-                              className="absolute inset-0 rounded-lg ring-1 ring-blue-400/30 dark:ring-blue-500/30"
-                            />
-                          )}
-                        </motion.button>
-                      );
-                    })}
-                  </div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-          
-          {/* Footer with controls - simplified rendering */}
-          <div className="flex justify-between items-center p-4 border-t border-gray-200">
-            <div>
-              {isMobileRef.current ? (
-                <p className="text-sm text-gray-500">Tap to select date</p>
-              ) : (
-                <p className="text-sm text-gray-500">Swipe or use arrow keys</p>
               )}
             </div>
-            <div className="flex space-x-2">
-              <button
-                className="px-3 py-1 bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200 transition-colors"
-                onClick={handleTodayClick}
-              >
-                Today
-              </button>
-              <button
-                className="px-3 py-1 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors"
-                onClick={onClose}
-              >
-                Close
-              </button>
+
+            {/* Year Selector View or Calendar View with optimized rendering */}
+            <AnimatePresence mode="wait">
+              {viewMode === 'year' ? (
+                <motion.div
+                  key="year-selector"
+                  initial={{ opacity: 0, y: -20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  transition={{ duration: 0.12 }}
+                  className="p-4 max-h-[250px] overflow-y-auto overscroll-contain"
+                >
+                  <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-2">
+                    {years.map(year => (
+                      <button
+                        key={year}
+                        onClick={() => handleYearChange(year)}
+                        className={`
+                          py-2 rounded-md text-center transition-colors
+                          ${year === getYear(currentMonth)
+                            ? 'bg-blue-500 text-white font-medium'
+                            : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200'
+                          }
+                        `}
+                        aria-label={`${year}${year === getYear(currentMonth) ? ', selected' : ''}`}
+                        aria-selected={year === getYear(currentMonth)}
+                      >
+                        {year}
+                      </button>
+                    ))}
+                  </div>
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="calendar-view"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 20 }}
+                  transition={{ duration: 0.12 }}
+                  className="calendar-container overscroll-contain"
+                  onTouchStart={(e) => {
+                    // Only handle touch events at container level if not on a button
+                    if (!(e.target as HTMLElement).closest('button')) {
+                      handleTouchStart(e);
+                    }
+                  }}
+                  onTouchMove={(e) => {
+                    // Allow move events for swipe detection at container level
+                    handleTouchMove(e);
+                  }}
+                  onTouchEnd={(e) => {
+                    // Only handle touch events at container level if not on a button
+                    if (!(e.target as HTMLElement).closest('button')) {
+                      handleTouchEnd(e);
+                    }
+                  }}
+                >
+                  {/* Calendar Grid - performance optimized */}
+                  <div className="p-4">
+                    {/* Weekday Headers - static render for performance */}
+                    <div className="grid grid-cols-7 mb-3">
+                      {WEEKDAYS.map(day => (
+                        <div key={day} className="text-center text-xs font-medium text-gray-500 dark:text-gray-400">
+                          {day}
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Calendar Days - performance optimized grid */}
+                    <div className="grid grid-cols-7 gap-1 sm:gap-2 content-start">
+                      {calendarDays.map((date, index) => {
+                        if (!date) {
+                          // Empty cell for padding - render minimal content
+                          return <div key={`empty-${index}`} className="aspect-square"></div>;
+                        }
+                        
+                        // Get task summary using optimized function
+                        const summary = getTaskSummary(date);
+                        
+                        // Safely compare dates to avoid errors - with early calculation
+                        let isSelected = false;
+                        let isTodayDate = false;
+                        
+                        try {
+                          isSelected = isSameDayOptimized(date, selectedDate);
+                          isTodayDate = isToday(date);
+                        } catch (error) {
+                          // Silent error - performance optimization
+                        }
+                        
+                        const isFocused = focusedDateIndex === index;
+
+                        // Only optimize costly renders with React.memo if we had many calendar days
+                        return (
+                          <motion.button
+                            key={date.toISOString()}
+                            ref={el => {
+                              dayButtonsRef.current[index] = el;
+                            }}
+                            onClick={() => handleDateSelection(date)}
+                            onTouchStart={(e) => {
+                              // Just track the touch start position without stopping propagation
+                              handleTouchStart(e);
+                            }}
+                            onTouchMove={handleTouchMove}
+                            onTouchEnd={(e) => handleDateTouchEnd(date, e)}
+                            onMouseEnter={(e) => handleMouseEnter(date, e)}
+                            onMouseLeave={handleMouseLeave}
+                            onKeyDown={(e) => handleKeyDown(e, index)}
+                            tabIndex={isFocused ? 0 : -1}
+                            variants={dayCellHoverVariants}
+                            initial="initial"
+                            whileHover="hover"
+                            whileTap="tap"
+                            className={`
+                              relative aspect-square rounded-lg
+                              flex flex-col items-center justify-center gap-1
+                              touch-manipulation
+                              ${isSelected
+                                ? 'bg-blue-600 text-white shadow-md z-10'
+                                : isTodayDate
+                                ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
+                                : summary.total > 0
+                                ? 'hover:bg-gray-100 dark:hover:bg-gray-700 bg-gray-50/70 dark:bg-gray-800/50'
+                                : 'hover:bg-gray-100 dark:hover:bg-gray-700'
+                              }
+                              ${isFocused 
+                                ? 'ring-2 ring-offset-2 ring-blue-500 dark:ring-offset-gray-800 z-10' 
+                                : ''
+                              }
+                              focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:focus:ring-offset-gray-800
+                            `}
+                            aria-label={`${format(date, 'MMMM d, yyyy')}${
+                              summary.total > 0 ? `, ${summary.total} tasks` : ''
+                            }${isSelected ? ', selected' : ''}${isTodayDate ? ', today' : ''}`}
+                            aria-selected={isSelected}
+                            aria-current={isTodayDate ? "date" : undefined}
+                          >
+                            {/* Date Number - simplified rendering */}
+                            <span className={`
+                              text-sm font-semibold 
+                              ${isSelected
+                                ? 'text-white'
+                                : isTodayDate
+                                ? 'text-blue-600 dark:text-blue-400'
+                                : 'text-gray-700 dark:text-gray-300'
+                              }
+                            `}>
+                              {format(date, 'd')}
+                            </span>
+                            
+                            {/* Task Status Indicators - conditionally rendered for performance */}
+                            {summary.total > 0 && !isSelected && (
+                              <div className={`
+                                flex items-center justify-center
+                                min-h-[6px] min-w-[6px]
+                                gap-[3px]
+                              `}>
+                                {summary.completed > 0 && (
+                                  <div className="w-1.5 h-1.5 rounded-full bg-green-500/80 dark:bg-green-400/80 shadow-sm" />
+                                )}
+                                {summary.overdue > 0 && (
+                                  <div className="w-1.5 h-1.5 rounded-full bg-red-500/80 dark:bg-red-400/80 shadow-sm animate-pulse" />
+                                )}
+                                {summary.inProgress > 0 && (
+                                  <div className="w-1.5 h-1.5 rounded-full bg-blue-500/80 dark:bg-blue-400/80 shadow-sm" />
+                                )}
+                              </div>
+                            )}
+
+                            {/* Task count badge - optimized rendering only when needed */}
+                            {summary.total > 0 && (
+                              <motion.div 
+                                className={`absolute ${isSelected ? 'top-0 right-0 translate-x-1/3 -translate-y-1/3' : '-top-2 -right-2'} 
+                                  min-w-[20px] h-[20px] rounded-full 
+                                  ${isSelected ? 'bg-white text-blue-600' : 'bg-blue-700 text-white'} 
+                                  text-[10px] font-semibold flex items-center justify-center px-1 shadow-md
+                                  border-2 ${isSelected ? 'border-blue-600' : 'border-white dark:border-gray-800'}
+                                  hover:scale-105 hover:shadow-md transition-transform duration-150
+                                  `}
+                                variants={badgeAnimationVariants}
+                                initial="initial"
+                                animate="animate"
+                                key={`badge-${date.toISOString()}-${summary.total}`}
+                                style={{ willChange: 'transform, opacity' }}
+                              >
+                                {summary.total}
+                              </motion.div>
+                            )}
+                            
+                            {/* Selected/Today Indicator Ring - only rendered when needed */}
+                            {(isTodayDate && !isSelected) && (
+                              <div
+                                className="absolute inset-0 rounded-lg ring-1 ring-blue-400/30 dark:ring-blue-500/30"
+                              />
+                            )}
+                          </motion.button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+            
+            {/* Footer with controls - simplified rendering */}
+            <div className="flex justify-between items-center p-4 border-t border-gray-200">
+              <div>
+                {isMobileRef.current ? (
+                  <p className="text-sm text-gray-500">Tap to select date</p>
+                ) : (
+                  <p className="text-sm text-gray-500">Swipe or use arrow keys</p>
+                )}
+              </div>
+              <div className="flex space-x-2">
+                <button
+                  className="px-3 py-1 bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200 transition-colors"
+                  onClick={handleTodayClick}
+                >
+                  Today
+                </button>
+                <button
+                  className="px-3 py-1 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors"
+                  onClick={onClose}
+                >
+                  Close
+                </button>
+              </div>
             </div>
+            
+            {/* Task Tooltip - only render when needed */}
+            <AnimatePresence>
+              {hoveredDate && renderTooltip}
+            </AnimatePresence>
           </div>
-          
-          {/* Task Tooltip - only render when needed */}
-          <AnimatePresence>
-            {hoveredDate && renderTooltip}
-          </AnimatePresence>
-        </div>
-      </motion.div>
+        </motion.div>
+      )}
     </AnimatePresence>
   );
 }

@@ -48,6 +48,7 @@ const OfflineStatus = () => {
     <div 
       className={`fixed bottom-4 right-4 z-50 p-2 rounded-full transition-opacity duration-300 
         ${isOffline ? 'bg-red-500 opacity-100' : 'bg-green-500 opacity-0'}`}
+      style={{ pointerEvents: isOffline ? 'auto' : 'none' }}
     >
       <WifiOff className={`h-4 w-4 text-white ${isOffline ? 'opacity-100' : 'opacity-0'}`} />
     </div>
@@ -59,6 +60,7 @@ const OfflineStatus = () => {
       className={`fixed top-4 left-1/2 transform -translate-x-1/2 z-50 
         bg-amber-50 border border-amber-200 rounded-lg shadow-lg p-3 flex items-center
         transition-all duration-300 ${showBanner && isOffline ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-12'}`}
+      style={{ pointerEvents: showBanner && isOffline ? 'auto' : 'none' }}
     >
       <AlertCircle className="h-5 w-5 text-amber-500 mr-2" />
       <span className="text-amber-800 font-medium">

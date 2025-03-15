@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { ProfileMenu } from './profile/ProfileMenu';
 import { NotificationBadge } from './notifications/NotificationBadge';
 import { Layout, Moon, Sun, Calendar } from 'lucide-react';
@@ -47,6 +47,9 @@ export function Navigation({
     setIsCalendarOpen(!isCalendarOpen);
   };
 
+  // We'll just use click events which work for both mouse and touch
+  // without needing to preventDefault()
+
   const handleDateSelect = (date: Date) => {
     // Update local state
     setSelectedDate(date);
@@ -87,39 +90,39 @@ export function Navigation({
 
   return (
     <>
-      <nav className="fixed top-0 left-0 right-0 z-40">
-        <div className="bg-white/90 dark:bg-gray-900/95 backdrop-blur-md border-b border-gray-200 dark:border-gray-800 shadow-sm">
+      <nav className="fixed top-0 left-0 right-0 z-50">
+        <div className="bg-white/98 dark:bg-gray-900/98 backdrop-blur-md border-b border-gray-200/70 dark:border-gray-800/70 shadow-sm">
           <div className="max-w-7xl mx-auto px-4 sm:px-6">
-            <div className="flex justify-between items-center h-16">
+            <div className="flex justify-between items-center h-14">
               {/* Logo and Brand */}
               <div className="flex-shrink-0 flex items-center">
                 <button 
                   onClick={() => setIsSlidingNavOpen(true)}
-                  className="group flex items-center gap-2.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 dark:focus-visible:ring-blue-400/50 rounded-lg p-1"
+                  className="group flex items-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60 dark:focus-visible:ring-blue-400/60 rounded-lg p-1.5 hover:bg-gray-50/80 dark:hover:bg-gray-800/80 transition-all duration-200"
                   aria-label="Open navigation menu"
                 >
-                  <div className="p-1.5 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-md shadow-blue-500/10 dark:shadow-blue-500/5 group-hover:shadow-blue-500/20 dark:group-hover:shadow-blue-500/10 transition-all duration-200">
-                    <Layout className="w-5 h-5" strokeWidth={2} />
+                  <div className="p-1.5 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-sm shadow-blue-500/20 dark:shadow-blue-600/10 group-hover:shadow-blue-500/30 dark:group-hover:shadow-blue-500/20 transition-all duration-300">
+                    <Layout className="w-4 h-4" strokeWidth={1.75} />
                   </div>
-                  <h1 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent group-hover:from-blue-500 group-hover:to-indigo-500 transition-all duration-200">
+                  <h1 className="text-lg font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent group-hover:from-blue-500 group-hover:to-indigo-500 transition-all duration-300">
                     NestTask
                   </h1>
                 </button>
               </div>
 
               {/* Right Section - Action Icons */}
-              <div className="flex items-center space-x-1 sm:space-x-2">
+              <div className="flex items-center space-x-1.5 sm:space-x-2.5">
                 {/* Theme Toggle Button */}
                 <div className="relative flex items-center">
                   <button
                     onClick={toggle}
-                    className="p-2.5 rounded-lg bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 dark:focus-visible:ring-blue-400/50"
+                    className="p-2 rounded-lg bg-gray-50/80 dark:bg-gray-800/80 hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 dark:focus-visible:ring-blue-400/50 touch-manipulation hover:shadow-sm"
                     aria-label="Toggle theme"
                   >
                     {isDark ? (
-                      <Sun className="w-5 h-5 text-amber-500" strokeWidth={2} />
+                      <Sun className="w-4 h-4 text-amber-500" strokeWidth={1.75} />
                     ) : (
-                      <Moon className="w-5 h-5 text-indigo-600" strokeWidth={2} />
+                      <Moon className="w-4 h-4 text-indigo-600" strokeWidth={1.75} />
                     )}
                   </button>
                 </div>
@@ -128,10 +131,10 @@ export function Navigation({
                 <div className="relative flex items-center">
                   <button
                     onClick={handleCalendarToggle}
-                    className="p-2.5 rounded-lg bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 dark:focus-visible:ring-blue-400/50"
+                    className="p-2 rounded-lg bg-gray-50/80 dark:bg-gray-800/80 hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 dark:focus-visible:ring-blue-400/50 touch-manipulation hover:shadow-sm"
                     aria-label="Show calendar"
                   >
-                    <Calendar className="w-5 h-5 text-blue-600 dark:text-blue-400" strokeWidth={2} />
+                    <Calendar className="w-4 h-4 text-blue-600 dark:text-blue-400" strokeWidth={1.75} />
                   </button>
                 </div>
 
@@ -139,12 +142,12 @@ export function Navigation({
                 <div className="relative flex items-center">
                   <button
                     onClick={onNotificationsClick}
-                    className="p-2.5 rounded-lg bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 dark:focus-visible:ring-blue-400/50 relative"
+                    className="p-2 rounded-lg bg-gray-50/80 dark:bg-gray-800/80 hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 dark:focus-visible:ring-blue-400/50 relative touch-manipulation hover:shadow-sm"
                     aria-label="View notifications"
                   >
-                    <Bell className="w-5 h-5 text-gray-700 dark:text-gray-300" strokeWidth={2} />
+                    <Bell className="w-4 h-4 text-gray-700 dark:text-gray-300" strokeWidth={1.75} />
                     {hasUnreadNotifications && (
-                      <span className="absolute top-2 right-2 w-2.5 h-2.5 bg-red-500 rounded-full ring-2 ring-white dark:ring-gray-800" />
+                      <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full ring-1 ring-white dark:ring-gray-800" />
                     )}
                   </button>
                 </div>
@@ -192,7 +195,7 @@ function Bell(props: React.SVGProps<SVGSVGElement>) {
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth="2"
+      strokeWidth="1.75"
       strokeLinecap="round"
       strokeLinejoin="round"
       {...props}

@@ -59,13 +59,32 @@ if (workbox) {
   
   // Special handling for API requests
   workbox.routing.registerRoute(
-    ({ url }) => url.pathname.startsWith('/api') && isValidUrl(url.href),
+    ({ url }) => (url.pathname.startsWith('/api') || 
+                 url.pathname.includes('supabase')) && 
+                 isValidUrl(url.href),
     new workbox.strategies.NetworkFirst({
       cacheName: 'api-responses',
       plugins: [
         new workbox.expiration.ExpirationPlugin({
           maxEntries: 50,
           maxAgeSeconds: 24 * 60 * 60, // 1 day
+        }),
+      ],
+    })
+  );
+  
+  // Special route for routine-related API requests (to ensure they work offline)
+  workbox.routing.registerRoute(
+    ({ url }) => 
+      (url.pathname.includes('/routines') || 
+       url.pathname.includes('/routine_slots')) && 
+      isValidUrl(url.href),
+    new workbox.strategies.StaleWhileRevalidate({
+      cacheName: 'routine-data',
+      plugins: [
+        new workbox.expiration.ExpirationPlugin({
+          maxEntries: 20,
+          maxAgeSeconds: 7 * 24 * 60 * 60, // 7 days
         }),
       ],
     })

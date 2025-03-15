@@ -12,6 +12,18 @@
     --background: 222.2 84% 4.9%;
     --foreground: 210 40% 98%;
   }
+  
+  /* This ensures React knows these elements need non-passive touch events */
+  .non-passive-touch {
+    touch-action: none;
+  }
+}
+
+/* Mobile touch improvements */
+.touch-manipulation {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  cursor: pointer; /* Ensure cursor shows it's clickable */
 }
 
 /* Custom utility classes */

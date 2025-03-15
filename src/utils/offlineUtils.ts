@@ -2,11 +2,12 @@ import { Workbox } from 'workbox-window';
 
 // IndexedDB database name and version
 const DB_NAME = 'nesttask-offline-db';
-const DB_VERSION = 1;
+const DB_VERSION = 2; // Upgraded version to accommodate new store
 
 // Store names
 const TASKS_STORE = 'tasks';
 const PENDING_ACTIONS_STORE = 'pending-actions';
+const ROUTINES_STORE = 'routines'; // New store for routines
 
 // Initialize the offline database
 export async function initOfflineDB(): Promise<IDBDatabase> {
@@ -28,6 +29,11 @@ export async function initOfflineDB(): Promise<IDBDatabase> {
         });
         pendingStore.createIndex('action', 'action', { unique: false });
         pendingStore.createIndex('timestamp', 'timestamp', { unique: false });
+      }
+      
+      // Add routines store for offline access
+      if (!db.objectStoreNames.contains(ROUTINES_STORE)) {
+        db.createObjectStore(ROUTINES_STORE, { keyPath: 'id' });
       }
     };
     
@@ -234,6 +240,30 @@ export async function syncPendingActions(): Promise<void> {
             endpoint = `/api/tasks/${action.data.id}`;
             method = 'DELETE';
             break;
+          case 'create-routine':
+            endpoint = '/api/routines';
+            method = 'POST';
+            break;
+          case 'update-routine':
+            endpoint = `/api/routines/${action.data.id}`;
+            method = 'PATCH';
+            break;
+          case 'delete-routine':
+            endpoint = `/api/routines/${action.data.id}`;
+            method = 'DELETE';
+            break;
+          case 'add-routine-slot':
+            endpoint = `/api/routines/${action.data.routineId}/slots`;
+            method = 'POST';
+            break;
+          case 'update-routine-slot':
+            endpoint = `/api/routines/${action.data.routineId}/slots/${action.data.slotId}`;
+            method = 'PATCH';
+            break;
+          case 'delete-routine-slot':
+            endpoint = `/api/routines/${action.data.routineId}/slots/${action.data.slotId}`;
+            method = 'DELETE';
+            break;
           default:
             console.warn('Unknown action type:', action.action);
             continue;
@@ -248,23 +278,71 @@ export async function syncPendingActions(): Promise<void> {
           body: JSON.stringify(action.data)
         });
         
-        if (response.ok) {
-          // Remove successful action from pending queue
-          await removePendingAction(action.id);
-        } else {
-          // Increment retry count or remove if too many attempts
-          if (action.retries >= 3) {
-            await removePendingAction(action.id);
-          } else {
-            await updateActionRetryCount(action.id, action.retries + 1);
+        if (!response.ok) {
+          throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+        }
+        
+        // If successful, remove the action from the pending queue
+        await removePendingAction(action.id);
+        
+        // If this was a create action with a temporary ID, we might need to update
+        // the ID in our local storage with the real server-assigned ID
+        if (action.action === 'create-task' || action.action === 'create-routine') {
+          const responseData = await response.json();
+          if (responseData.id && action.data.id && action.data.id.startsWith('temp-')) {
+            if (action.action === 'create-task') {
+              await updateLocalTaskId(action.data.id, responseData.id);
+            } else if (action.action === 'create-routine') {
+              await updateLocalRoutineId(action.data.id, responseData.id);
+            }
           }
         }
       } catch (error) {
-        console.error('Error syncing action:', action, error);
+        console.error(`Failed to sync action ${action.action}:`, error);
+        
+        // Increment retry count
+        action.retries = (action.retries || 0) + 1;
+        
+        // If we haven't exceeded max retries, update the action
+        if (action.retries < 5) {
+          await updatePendingAction(action.id, action);
+        } else {
+          // Otherwise, mark it as failed but don't remove it
+          await updatePendingAction(action.id, {
+            ...action,
+            status: 'failed'
+          });
+        }
       }
     }
   } catch (error) {
-    console.error('Error in syncPendingActions:', error);
+    console.error('Error syncing pending actions:', error);
+  }
+}
+
+// Helper to update a task's ID after successful sync
+async function updateLocalTaskId(tempId: string, realId: string): Promise<void> {
+  try {
+    const tasks = await getLocalTasks();
+    const updatedTasks = tasks.map(task => 
+      task.id === tempId ? { ...task, id: realId } : task
+    );
+    await saveTasksLocally(updatedTasks);
+  } catch (error) {
+    console.error('Error updating local task ID:', error);
+  }
+}
+
+// Helper to update a routine's ID after successful sync
+async function updateLocalRoutineId(tempId: string, realId: string): Promise<void> {
+  try {
+    const routines = await getLocalRoutines();
+    const updatedRoutines = routines.map(routine => 
+      routine.id === tempId ? { ...routine, id: realId } : routine
+    );
+    await saveRoutinesLocally(updatedRoutines);
+  } catch (error) {
+    console.error('Error updating local routine ID:', error);
   }
 }
 
@@ -402,4 +480,136 @@ export function addOnlineStatusListener(callback: (online: boolean) => void): ()
     window.removeEventListener('online', handleOnline);
     window.removeEventListener('offline', handleOffline);
   };
+}
+
+// Save routines data to IndexedDB for offline access
+export async function saveRoutinesLocally(routines: any[]): Promise<void> {
+  if (!routines || routines.length === 0) {
+    console.warn('No routines provided to save locally');
+    return;
+  }
+
+  return new Promise((resolve, reject) => {
+    initOfflineDB().then(db => {
+      // Create a new transaction for the clear operation
+      const clearTransaction = db.transaction(ROUTINES_STORE, 'readwrite');
+      const clearStore = clearTransaction.objectStore(ROUTINES_STORE);
+      
+      const clearRequest = clearStore.clear();
+      
+      clearRequest.onsuccess = () => {
+        // After clearing completes successfully, start a new transaction for adding
+        const addTransaction = db.transaction(ROUTINES_STORE, 'readwrite');
+        const addStore = addTransaction.objectStore(ROUTINES_STORE);
+        
+        // Track any errors
+        let hasError = false;
+        
+        addTransaction.onerror = (event) => {
+          console.error('Transaction error during routine save:', (event.target as IDBTransaction).error);
+          hasError = true;
+          reject((event.target as IDBTransaction).error);
+        };
+        
+        addTransaction.oncomplete = () => {
+          if (!hasError) {
+            console.log('Successfully saved routines for offline use');
+            resolve();
+          }
+        };
+        
+        // Add routines one by one
+        routines.forEach(routine => {
+          try {
+            addStore.add(routine);
+          } catch (error) {
+            console.error('Error adding routine to store:', error, routine);
+            hasError = true;
+          }
+        });
+      };
+      
+      clearRequest.onerror = (event) => {
+        console.error('Error clearing routine store:', (event.target as IDBRequest).error);
+        reject((event.target as IDBRequest).error);
+      };
+      
+    }).catch(error => {
+      console.error('Error initializing DB for saving routines:', error);
+      reject(error);
+    });
+  });
+}
+
+// Get routines from IndexedDB when offline
+export async function getLocalRoutines(): Promise<any[]> {
+  return new Promise((resolve, reject) => {
+    initOfflineDB().then(db => {
+      const transaction = db.transaction(ROUTINES_STORE, 'readonly');
+      const store = transaction.objectStore(ROUTINES_STORE);
+      const request = store.getAll();
+      
+      request.onsuccess = () => {
+        console.log('Retrieved routines from local storage:', request.result?.length);
+        resolve(request.result || []);
+      };
+      
+      request.onerror = (event) => {
+        console.error('Error getting local routines:', (event.target as IDBRequest).error);
+        reject((event.target as IDBRequest).error);
+      };
+      
+    }).catch(error => {
+      console.error('Error initializing DB for getting routines:', error);
+      reject(error);
+    });
+  });
+}
+
+// Helper function to update a pending action
+export async function updatePendingAction(id: number, updatedAction: any): Promise<void> {
+  return new Promise((resolve, reject) => {
+    initOfflineDB().then(db => {
+      // First get the record
+      const getTransaction = db.transaction(PENDING_ACTIONS_STORE, 'readonly');
+      const getStore = getTransaction.objectStore(PENDING_ACTIONS_STORE);
+      const getRequest = getStore.get(id);
+      
+      getRequest.onsuccess = () => {
+        const record = getRequest.result;
+        if (record) {
+          // Update the record in a new transaction
+          const updateTransaction = db.transaction(PENDING_ACTIONS_STORE, 'readwrite');
+          const updateStore = updateTransaction.objectStore(PENDING_ACTIONS_STORE);
+          
+          const updateRequest = updateStore.put({
+            ...record,
+            ...updatedAction,
+            id // Ensure ID is preserved
+          });
+          
+          updateRequest.onsuccess = () => {
+            resolve();
+          };
+          
+          updateRequest.onerror = (event) => {
+            console.error('Error updating pending action:', (event.target as IDBRequest).error);
+            reject((event.target as IDBRequest).error);
+          };
+        } else {
+          console.warn(`Pending action with ID ${id} not found for update`);
+          resolve(); // Record not found, consider it resolved
+        }
+      };
+      
+      getRequest.onerror = (event) => {
+        console.error('Error getting record for pending action update:', (event.target as IDBRequest).error);
+        reject((event.target as IDBRequest).error);
+      };
+      
+    }).catch(error => {
+      console.error('Error initializing DB for updating pending action:', error);
+      reject(error);
+    });
+  });
 } 

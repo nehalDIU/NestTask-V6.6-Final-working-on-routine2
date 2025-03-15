@@ -295,10 +295,13 @@ export function UpcomingPage() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Error Alert */}
-      {(taskError || operationError) && (
+      {(taskError || operationError) ? (
         <div className="fixed top-4 right-4 z-50 bg-red-100 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 px-4 py-3 rounded-lg shadow-lg animate-fade-in">
           <p className="text-sm font-medium">{taskError || operationError}</p>
         </div>
+      ) : (
+        // This empty div ensures the error alert space is reserved but not blocking interactions
+        <div className="fixed top-4 right-4 z-50 pointer-events-none" style={{ opacity: 0 }}></div>
       )}
 
       {/* Loading Overlay */}

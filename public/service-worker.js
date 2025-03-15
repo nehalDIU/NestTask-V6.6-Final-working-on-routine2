@@ -1,6 +1,7 @@
-const CACHE_NAME = 'nesttask-v1';
+const CACHE_NAME = 'nesttask-v2';
 const OFFLINE_URL = '/offline.html';
 
+// Assets to cache on install
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -9,7 +10,18 @@ const STATIC_ASSETS = [
   '/icons/icon-192x192.png',
   '/icons/icon-512x512.png',
   '/icons/add-task.png',
-  '/icons/view-tasks.png'
+  '/icons/view-tasks.png',
+  // Cache additional assets for UI
+  '/icons/badge.png',
+  '/src/index.css'
+];
+
+// Dynamic assets that should be cached during runtime
+const RUNTIME_CACHE_PATTERNS = [
+  /\.(js|css)$/, // JS and CSS files
+  /\/icons\/.*\.png$/, // Icon images
+  /^https:\/\/fonts\.googleapis\.com/, // Google fonts stylesheets
+  /^https:\/\/fonts\.gstatic\.com/ // Google fonts files
 ];
 
 // Install event - cache static assets
@@ -36,23 +48,86 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// Fetch event - network first, fallback to cache
+// Helper function to determine if a URL should be cached at runtime
+function shouldCacheAtRuntime(url) {
+  // Don't cache Supabase API requests
+  if (url.includes('supabase.co')) {
+    return false;
+  }
+  
+  // Check if the URL matches any of our patterns
+  return RUNTIME_CACHE_PATTERNS.some(pattern => pattern.test(url));
+}
+
+// Fetch event - stale-while-revalidate strategy for assets, network-first for API
 self.addEventListener('fetch', (event) => {
   // Handle non-GET requests
   if (event.request.method !== 'GET') return;
 
-  // Handle Supabase API requests differently
-  if (event.request.url.includes('supabase.co')) {
+  const url = new URL(event.request.url);
+
+  // Skip Supabase API requests (let them go to network)
+  if (url.hostname.includes('supabase.co')) {
     return;
   }
 
+  // Navigation requests (HTML pages) - network first
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request)
+        .then(response => {
+          // Cache the latest version
+          const responseClone = response.clone();
+          caches.open(CACHE_NAME).then(cache => {
+            cache.put(event.request, responseClone);
+          });
+          return response;
+        })
+        .catch(async () => {
+          // Offline fallback
+          const cache = await caches.open(CACHE_NAME);
+          const cachedResponse = await cache.match(event.request);
+          if (cachedResponse) return cachedResponse;
+          
+          // If no cached version, show offline page
+          return cache.match(OFFLINE_URL);
+        })
+    );
+    return;
+  }
+
+  // For runtime-cacheable assets (JS, CSS, images) - stale-while-revalidate
+  if (shouldCacheAtRuntime(event.request.url)) {
+    event.respondWith(
+      caches.open(CACHE_NAME).then(cache => {
+        return cache.match(event.request).then(cachedResponse => {
+          const fetchPromise = fetch(event.request)
+            .then(networkResponse => {
+              // Cache the new version
+              cache.put(event.request, networkResponse.clone());
+              return networkResponse;
+            })
+            .catch(() => {
+              // If fetch fails, return cached or null
+              return cachedResponse || null;
+            });
+
+          // Return cached response immediately, or wait for network
+          return cachedResponse || fetchPromise;
+        });
+      })
+    );
+    return;
+  }
+
+  // For all other requests - network first with cache fallback
   event.respondWith(
     fetch(event.request)
-      .then((response) => {
-        // Cache successful responses
-        if (response.ok) {
+      .then(response => {
+        // Cache successful responses that match patterns
+        if (response.ok && shouldCacheAtRuntime(event.request.url)) {
           const responseClone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => {
+          caches.open(CACHE_NAME).then(cache => {
             cache.put(event.request, responseClone);
           });
         }
@@ -63,11 +138,7 @@ self.addEventListener('fetch', (event) => {
         const cachedResponse = await caches.match(event.request);
         if (cachedResponse) return cachedResponse;
 
-        // Return offline page for navigation requests
-        if (event.request.mode === 'navigate') {
-          return caches.match(OFFLINE_URL);
-        }
-
+        // Return error response
         return new Response('Network error', { status: 408 });
       })
   );

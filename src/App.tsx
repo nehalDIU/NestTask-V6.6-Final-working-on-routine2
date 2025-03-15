@@ -37,6 +37,15 @@ interface NotificationsPageProps {
   onClear: (id: string) => void;
 }
 
+interface AdminDashboardProps {
+  users: any[];
+  tasks: Task[];
+  onLogout: () => void;
+  onCreateTask: (task: Omit<Task, 'id' | 'createdAt'>) => void;
+  onDeleteTask: (taskId: string) => void;
+  onUpdateTask: (taskId: string, updates: Partial<Task>) => void;
+}
+
 // Create lazy-loadable components with proper error handling
 const UpcomingPage = () => (
   <LazyWrapper 
@@ -80,9 +89,13 @@ const RoutinePage = () => (
   />
 );
 
-const AdminDashboardPage = () => (
+const AdminDashboardWithProps = (props: AdminDashboardProps) => (
   <LazyWrapper 
-    componentImport={() => wrapNamedImport<{}>(import('./pages/AdminDashboard'), 'AdminDashboard')}
+    componentImport={() => wrapNamedImport<AdminDashboardProps>(import('./pages/AdminDashboard'), 'AdminDashboard')
+      .then(component => ({
+        default: (innerProps) => <component.default {...props} {...innerProps} />
+      }))
+    }
     fallback={<LoadingScreen />} 
   />
 );
@@ -159,7 +172,14 @@ export default function App() {
   if (user.role === 'admin') {
     return (
       <Suspense fallback={<LoadingScreen />}>
-        <AdminDashboardPage />
+        <AdminDashboardWithProps 
+          users={users || []}
+          tasks={tasks || []}
+          onLogout={logout}
+          onCreateTask={createTask}
+          onDeleteTask={deleteTask}
+          onUpdateTask={updateTask}
+        />
       </Suspense>
     );
   }

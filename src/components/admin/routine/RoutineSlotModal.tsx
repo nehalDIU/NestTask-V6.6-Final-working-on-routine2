@@ -50,6 +50,12 @@ export function RoutineSlotModal({
           courseName: selectedCourse.name
         }));
       }
+    } else {
+      // Clear courseName if no courseId is selected
+      setFormData(prev => ({
+        ...prev,
+        courseName: ''
+      }));
     }
 
     // Update teacherName when teacherId changes
@@ -61,8 +67,14 @@ export function RoutineSlotModal({
           teacherName: selectedTeacher.name
         }));
       }
+    } else {
+      // Clear teacherName if no teacherId is selected
+      setFormData(prev => ({
+        ...prev,
+        teacherName: ''
+      }));
     }
-  }, [formData.courseId, formData.teacherId, courses, teachers]);
+  }, [formData.courseId, formData.teacherId, courses, teachers, routineId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -72,19 +84,38 @@ export function RoutineSlotModal({
     try {
       console.log('Submitting form data:', { routineId, formData }); // Add logging to debug
       
+      // Ensure course and teacher names are correctly set
+      let submissionData = { ...formData };
+      
+      // Double-check courseName from courseId
+      if (submissionData.courseId) {
+        const selectedCourse = courses.find(c => c.id === submissionData.courseId);
+        if (selectedCourse) {
+          submissionData.courseName = selectedCourse.name;
+        }
+      }
+      
+      // Double-check teacherName from teacherId
+      if (submissionData.teacherId) {
+        const selectedTeacher = teachers.find(t => t.id === submissionData.teacherId);
+        if (selectedTeacher) {
+          submissionData.teacherName = selectedTeacher.name;
+        }
+      }
+      
       if (slot) {
         // Edit existing slot - need to use the 3-parameter version
         const updateFn = onSubmit as (routineId: string, slotId: string, updates: Partial<RoutineSlot>) => Promise<void>;
-        await updateFn(routineId, slot.id, formData);
+        await updateFn(routineId, slot.id, submissionData);
       } else {
         // Create new slot - need to use the 2-parameter version
         const createFn = onSubmit as (routineId: string, slot: Omit<RoutineSlot, 'id' | 'routineId' | 'createdAt'>) => Promise<RoutineSlot>;
         // Ensure all required fields are present
-        if (!formData.dayOfWeek || !formData.startTime || !formData.endTime) {
+        if (!submissionData.dayOfWeek || !submissionData.startTime || !submissionData.endTime) {
           console.error('Missing required fields:', { 
-            dayOfWeek: formData.dayOfWeek, 
-            startTime: formData.startTime, 
-            endTime: formData.endTime 
+            dayOfWeek: submissionData.dayOfWeek, 
+            startTime: submissionData.startTime, 
+            endTime: submissionData.endTime 
           });
           setStatusMessage({
             type: 'error', 
@@ -102,7 +133,7 @@ export function RoutineSlotModal({
           throw new Error('No routine selected');
         }
         
-        await createFn(routineId, formData);
+        await createFn(routineId, submissionData);
         setStatusMessage({
           type: 'success', 
           message: 'Time slot created successfully!'

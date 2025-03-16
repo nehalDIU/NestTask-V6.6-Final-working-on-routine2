@@ -16,8 +16,6 @@ export async function fetchRoutines(): Promise<Routine[]> {
           section,
           course_id,
           teacher_id,
-          course_name,
-          teacher_name,
           created_at
         )
       `)
@@ -38,8 +36,8 @@ export async function fetchRoutines(): Promise<Routine[]> {
         routineId: routine.id,
         courseId: slot.course_id,
         teacherId: slot.teacher_id,
-        courseName: slot.course_name,
-        teacherName: slot.teacher_name,
+        courseName: '',
+        teacherName: '',
         dayOfWeek: slot.day_of_week,
         startTime: slot.start_time,
         endTime: slot.end_time,
@@ -160,11 +158,9 @@ export async function addRoutineSlot(
         room_number: slot.roomNumber || null,
         section: slot.section || null,
         course_id: slot.courseId || null,
-        teacher_id: slot.teacherId || null,
-        course_name: slot.courseName || null,
-        teacher_name: slot.teacherName || null
+        teacher_id: slot.teacherId || null
       })
-      .select('*, routine:routines(*)')
+      .select('*')
       .single();
 
     if (error) {
@@ -182,8 +178,8 @@ export async function addRoutineSlot(
       routineId: data.routine_id,
       courseId: data.course_id,
       teacherId: data.teacher_id,
-      courseName: data.course_name,
-      teacherName: data.teacher_name,
+      courseName: slot.courseName || '',
+      teacherName: slot.teacherName || '',
       dayOfWeek: data.day_of_week,
       startTime: data.start_time,
       endTime: data.end_time,
@@ -207,13 +203,13 @@ export async function updateRoutineSlot(
   updates: Partial<RoutineSlot>
 ): Promise<void> {
   try {
+    console.log('Updating routine slot:', { routineId, slotId, updates });
+    
     const { error } = await supabase
       .from('routine_slots')
       .update({
         course_id: updates.courseId,
         teacher_id: updates.teacherId,
-        course_name: updates.courseName,
-        teacher_name: updates.teacherName,
         day_of_week: updates.dayOfWeek,
         start_time: updates.startTime,
         end_time: updates.endTime,
@@ -223,7 +219,12 @@ export async function updateRoutineSlot(
       .eq('id', slotId)
       .eq('routine_id', routineId);
 
-    if (error) throw error;
+    if (error) {
+      console.error('Database error:', error);
+      throw error;
+    }
+
+    console.log('Successfully updated routine slot');
   } catch (error) {
     console.error('Error updating routine slot:', error);
     throw error;

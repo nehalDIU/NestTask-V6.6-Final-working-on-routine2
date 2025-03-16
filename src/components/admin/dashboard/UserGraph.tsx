@@ -14,6 +14,8 @@ import {
   Legend,
   AreaChart,
   ComposedChart,
+  ReferenceLine,
+  Bar,
 } from 'recharts';
 import { TrendingUp, Calendar, ArrowUpRight, Info } from 'lucide-react';
 import type { User } from '../../../types/auth';
@@ -63,9 +65,15 @@ const TimeFilter = ({ selected, onChange, isMobile }: TimeFilterProps) => {
 
 interface UserGraphProps {
   users: User[];
+  chartType?: 'bar' | 'line';
+  timeRange?: 'year' | '6months' | '30days';
 }
 
-export function UserGraph({ users }: UserGraphProps) {
+export function UserGraph({ 
+  users, 
+  chartType = 'line',
+  timeRange = 'year' 
+}: UserGraphProps) {
   const [timeFilter, setTimeFilter] = useState<'week' | 'month' | 'year'>('year');
   const [animationActive, setAnimationActive] = useState(false);
   const [hoveredPoint, setHoveredPoint] = useState<number | null>(null);
@@ -84,6 +92,17 @@ export function UserGraph({ users }: UserGraphProps) {
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
+
+  // Map timeRange prop to timeFilter when it changes
+  useEffect(() => {
+    if (timeRange === '30days') {
+      setTimeFilter('month');
+    } else if (timeRange === '6months') {
+      setTimeFilter('month'); // We'll adjust the data below
+    } else {
+      setTimeFilter('year');
+    }
+  }, [timeRange]);
 
   // Trigger animation on first load and when changing time filter
   useEffect(() => {
@@ -109,55 +128,129 @@ export function UserGraph({ users }: UserGraphProps) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Generate chart data based on the selected time filter
+  // Generate chart data based on the selected time filter and timeRange prop
   const chartData = useMemo(() => {
     const now = new Date();
-    const data: { name: string; users: number; newUsers?: number; date?: Date }[] = [];
+    const data: { name: string; users: number; newUsers?: number; activeUsers?: number; date?: Date }[] = [];
     
-    if (timeFilter === 'week') {
-      // Generate data for the last 7 days
-      for (let i = 6; i >= 0; i--) {
+    if (timeFilter === 'week' || timeRange === '30days') {
+      // Generate data for the last 7 or 30 days
+      const days = timeRange === '30days' ? 30 : 7;
+      
+      for (let i = days - 1; i >= 0; i--) {
         const date = new Date(now);
         date.setDate(date.getDate() - i);
-        const dayName = date.toLocaleDateString('en-US', { 
-          weekday: isMobile ? 'narrow' : 'short' // Use narrower format on mobile
-        });
+        
+        // For 30 days, use date format instead of day name
+        const dayName = timeRange === '30days' 
+          ? date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+          : date.toLocaleDateString('en-US', { weekday: isMobile ? 'narrow' : 'short' });
         
         const newUsersCount = users.filter(user => {
           const userDate = new Date(user.createdAt);
           return userDate.toDateString() === date.toDateString();
         }).length;
         
+        // Count active users for this day - set hours to ensure whole day is covered
+        const activeDate = new Date(date);
+        activeDate.setHours(0, 0, 0, 0);
+        
+        const nextDay = new Date(activeDate);
+        nextDay.setDate(nextDay.getDate() + 1);
+        
+        const activeUsersCount = users.filter(user => {
+          if (!user.lastActive) return false;
+          
+          const lastActive = new Date(user.lastActive);
+          // Normalize to remove time component for comparison
+          const lastActiveDay = new Date(lastActive);
+          lastActiveDay.setHours(0, 0, 0, 0);
+          
+          // Match exact day
+          return lastActiveDay.getTime() === activeDate.getTime();
+        }).length;
+        
         data.push({ 
           name: dayName, 
           users: 0, // Will be calculated for cumulative
           newUsers: newUsersCount,
+          activeUsers: activeUsersCount,
           date: new Date(date)
         });
       }
     } else if (timeFilter === 'month') {
-      // Generate data for the last 4 weeks
-      for (let i = 3; i >= 0; i--) {
-        const endDate = new Date(now);
-        endDate.setDate(endDate.getDate() - (i * 7));
-        const startDate = new Date(endDate);
-        startDate.setDate(startDate.getDate() - 6);
+      if (timeRange === '6months') {
+        // For 6 months view
+        const monthCount = 6;
         
-        const weekNum = 4 - i;
-        // Shorter label for mobile
-        const weekLabel = isMobile ? `W${weekNum}` : `Week ${weekNum}`;
-        
-        const newUsersCount = users.filter(user => {
-          const userDate = new Date(user.createdAt);
-          return userDate >= startDate && userDate <= endDate;
-        }).length;
-        
-        data.push({ 
-          name: weekLabel, 
-          users: 0, // Will be calculated for cumulative
-          newUsers: newUsersCount,
-          date: new Date(startDate)
-        });
+        for (let i = monthCount - 1; i >= 0; i--) {
+          const date = new Date(now);
+          date.setMonth(date.getMonth() - i);
+          const monthName = date.toLocaleDateString('en-US', { 
+            month: isMobile ? 'short' : 'long'
+          });
+          
+          const monthStart = new Date(date.getFullYear(), date.getMonth(), 1);
+          const monthEnd = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+          
+          const newUsersCount = users.filter(user => {
+            const userDate = new Date(user.createdAt);
+            return userDate >= monthStart && userDate <= monthEnd;
+          }).length;
+          
+          const activeUsersCount = users.filter(user => {
+            if (!user.lastActive) return false;
+            const lastActive = new Date(user.lastActive);
+            
+            // Count users active in this specific month
+            return lastActive.getFullYear() === monthStart.getFullYear() && 
+                   lastActive.getMonth() === monthStart.getMonth();
+          }).length;
+          
+          data.push({ 
+            name: monthName, 
+            users: 0, // Will be calculated for cumulative
+            newUsers: newUsersCount,
+            activeUsers: activeUsersCount,
+            date: new Date(monthStart)
+          });
+        }
+      } else {
+        // Original 4 weeks view
+        for (let i = 3; i >= 0; i--) {
+          const endDate = new Date(now);
+          endDate.setDate(endDate.getDate() - (i * 7));
+          const startDate = new Date(endDate);
+          startDate.setDate(startDate.getDate() - 6);
+          
+          // Ensure dates are at beginning of day
+          startDate.setHours(0, 0, 0, 0);
+          endDate.setHours(23, 59, 59, 999);
+          
+          const weekNum = 4 - i;
+          // Shorter label for mobile
+          const weekLabel = isMobile ? `W${weekNum}` : `Week ${weekNum}`;
+          
+          const newUsersCount = users.filter(user => {
+            const userDate = new Date(user.createdAt);
+            return userDate >= startDate && userDate <= endDate;
+          }).length;
+          
+          // Count active users for this week 
+          const activeUsersCount = users.filter(user => {
+            if (!user.lastActive) return false;
+            const lastActive = new Date(user.lastActive);
+            return lastActive >= startDate && lastActive <= endDate;
+          }).length;
+          
+          data.push({ 
+            name: weekLabel, 
+            users: 0, // Will be calculated for cumulative
+            newUsers: newUsersCount,
+            activeUsers: activeUsersCount,
+            date: new Date(startDate)
+          });
+        }
       }
     } else {
       // Generate data for the year (by month)
@@ -168,18 +261,30 @@ export function UserGraph({ users }: UserGraphProps) {
       for (let i = 0; i < 12; i++) {
         const month = i;
         const year = now.getFullYear();
-        const date = new Date(year, month, 1);
+        
+        // Create start and end dates for the month
+        const monthStart = new Date(year, month, 1);
+        const monthEnd = new Date(year, month + 1, 0);
+        monthEnd.setHours(23, 59, 59, 999);
         
         const newUsersCount = users.filter(user => {
           const userDate = new Date(user.createdAt);
           return userDate.getMonth() === month && userDate.getFullYear() === year;
         }).length;
         
+        // Count active users for this month
+        const activeUsersCount = users.filter(user => {
+          if (!user.lastActive) return false;
+          const lastActive = new Date(user.lastActive);
+          return lastActive.getMonth() === month && lastActive.getFullYear() === year;
+        }).length;
+        
         data.push({ 
           name: months[i], 
           users: 0, // Will be calculated for cumulative
           newUsers: newUsersCount,
-          date
+          activeUsers: activeUsersCount,
+          date: new Date(monthStart)
         });
       }
     }
@@ -188,24 +293,36 @@ export function UserGraph({ users }: UserGraphProps) {
     let cumulativeCount = 0;
     
     // Start with users registered before our timeframe
-    if (timeFilter === 'week') {
-      const weekStart = new Date(now);
-      weekStart.setDate(weekStart.getDate() - 6);
-      weekStart.setHours(0, 0, 0, 0);
+    if (timeFilter === 'week' || timeRange === '30days') {
+      const startDate = new Date(now);
+      startDate.setDate(startDate.getDate() - (timeRange === '30days' ? 30 : 7) + 1);
+      startDate.setHours(0, 0, 0, 0);
       
       cumulativeCount = users.filter(user => {
         const userDate = new Date(user.createdAt);
-        return userDate < weekStart;
+        return userDate < startDate;
       }).length;
     } else if (timeFilter === 'month') {
-      const monthStart = new Date(now);
-      monthStart.setDate(monthStart.getDate() - 28);
-      monthStart.setHours(0, 0, 0, 0);
-      
-      cumulativeCount = users.filter(user => {
-        const userDate = new Date(user.createdAt);
-        return userDate < monthStart;
-      }).length;
+      if (timeRange === '6months') {
+        const monthStart = new Date(now);
+        monthStart.setMonth(monthStart.getMonth() - 6);
+        monthStart.setDate(1);
+        monthStart.setHours(0, 0, 0, 0);
+        
+        cumulativeCount = users.filter(user => {
+          const userDate = new Date(user.createdAt);
+          return userDate < monthStart;
+        }).length;
+      } else {
+        const monthStart = new Date(now);
+        monthStart.setDate(monthStart.getDate() - 28);
+        monthStart.setHours(0, 0, 0, 0);
+        
+        cumulativeCount = users.filter(user => {
+          const userDate = new Date(user.createdAt);
+          return userDate < monthStart;
+        }).length;
+      }
     } else {
       const yearStart = new Date(now.getFullYear(), 0, 1);
       
@@ -221,7 +338,7 @@ export function UserGraph({ users }: UserGraphProps) {
     });
     
     return cumulativeData;
-  }, [users, timeFilter, isMobile]);
+  }, [users, timeFilter, isMobile, timeRange]);
 
   // Find all significant points (points with large increases)
   const significantPoints = useMemo(() => {
@@ -271,49 +388,67 @@ export function UserGraph({ users }: UserGraphProps) {
     return chartData.reduce((sum, item) => sum + (item.newUsers || 0), 0);
   }, [chartData]);
 
-  // Custom tooltip component with animation
-  const CustomTooltip = useCallback(({ active, payload, label }: any) => {
+  // Custom tooltip component
+  const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
-      const data = payload[0].payload;
-      
       return (
-        <div className="bg-white dark:bg-gray-800 shadow-md rounded-lg p-4 border border-gray-200 dark:border-gray-700 animate-scale-in touch-auto min-w-[160px]">
-          <div className="text-sm font-medium text-gray-900 dark:text-white mb-2 flex items-center justify-between">
-            <span className="font-semibold">{label}</span>
-            {data.date && <span className="text-xs text-gray-500 ml-2">
-              {new Date(data.date).toLocaleDateString()}
-            </span>}
+        <div className={`bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-lg ${isMobile ? 'p-2 max-w-[200px]' : 'p-3'} shadow-lg`}>
+          <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1 sm:mb-2">
+            {label}
           </div>
-          <div className="flex items-center text-sm text-blue-600 dark:text-blue-400 font-semibold mb-2">
-            <span className="w-3 h-3 rounded-full bg-blue-500 mr-2"></span>
-            <span>Total: {payload[0].value.toLocaleString()}</span>
+          
+          {payload.map((entry: any, index: number) => {
+            const colors: {[key: string]: string} = {
+              "Total Users": "#3B82F6",
+              "New Registrations": "#10B981",
+              "Active Users": "#8B5CF6"
+            };
+            const color = colors[entry.name] || entry.color;
+            
+            return (
+              <div key={`item-${index}`} className="flex items-center justify-between gap-3 sm:gap-8 mb-1">
+                <span className="flex items-center gap-1 sm:gap-2">
+                  <span 
+                    className="inline-block w-2 sm:w-3 h-2 sm:h-3 rounded-full"
+                    style={{ backgroundColor: color }}
+                  ></span>
+                  <span className="text-xs font-medium text-gray-700 dark:text-gray-300 truncate max-w-[90px] sm:max-w-full">
+                    {entry.name}:
+                  </span>
+                </span>
+                <span className="text-xs font-semibold text-gray-900 dark:text-white">
+                  {entry.value.toLocaleString()}
+                </span>
+              </div>
+            );
+          })}
+          
+          <div className="mt-1 sm:mt-2 pt-1 sm:pt-2 border-t border-gray-100 dark:border-gray-700">
+            <div className="text-xs text-gray-500 dark:text-gray-400">
+              {timeFilter === 'week' ? 'Weekly Stats' : timeFilter === 'month' ? 'Monthly Stats' : 'Yearly Stats'}
+            </div>
           </div>
-          {data.newUsers !== undefined && (
-            <div className="flex items-center text-sm text-emerald-600 dark:text-emerald-400">
-              <span className="w-3 h-3 rounded-full bg-emerald-500 mr-2"></span>
-              <span>New: +{data.newUsers.toLocaleString()} users</span>
-            </div>
-          )}
-          {maxGrowthPoint !== null && chartData.indexOf(data) === maxGrowthPoint && (
-            <div className="mt-2 text-xs bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-300 px-2 py-1 rounded">
-              <ArrowUpRight className="w-3 h-3 inline mr-1" /> Peak Growth
-            </div>
-          )}
         </div>
       );
     }
+    
     return null;
-  }, [chartData, maxGrowthPoint]);
-
-  const handleTimeFilterChange = (filter: 'week' | 'month' | 'year') => {
-    setTimeFilter(filter);
   };
 
+  // Get index for today in the data
+  const getTodayIndex = () => {
+    if (timeFilter === 'week') {
+      return chartData.length - 1;
+    } else if (timeRange === '30days') {
+      return chartData.length - 1;
+    }
+    return undefined;
+  };
+
+  // Handlers for mouse interactions
   const handleMouseMove = (e: any) => {
     if (e && e.activeTooltipIndex !== undefined) {
       setHoveredPoint(e.activeTooltipIndex);
-    } else {
-      setHoveredPoint(null);
     }
   };
 
@@ -321,246 +456,341 @@ export function UserGraph({ users }: UserGraphProps) {
     setHoveredPoint(null);
   };
 
+  // Find the component to render based on chartType
+  const ChartComponent = chartType === 'bar' ? ComposedChart : AreaChart;
+
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-b-2xl rounded-t-none sm:rounded-2xl p-5 sm:p-6 shadow-sm transition-all duration-300 border border-gray-200 dark:border-gray-700">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6">
-        <div className="relative">
-          <h3 className="text-base font-semibold text-gray-900 dark:text-white flex items-center group">
-            <TrendingUp className="w-5 h-5 mr-2 text-blue-600 dark:text-blue-400" />
-            User Growth Trends
-            <button 
-              ref={infoButtonRef}
-              className="ml-2 p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 focus:outline-none"
-              onClick={() => setShowInfoTooltip(!showInfoTooltip)}
-              aria-label="Information about user growth"
-            >
-              <Info className="w-4 h-4" />
-            </button>
-          </h3>
-          {showInfoTooltip && (
-            <div className="absolute z-10 mt-2 w-64 bg-white dark:bg-gray-800 rounded-lg shadow-lg p-3 border border-gray-200 dark:border-gray-700 text-xs text-gray-600 dark:text-gray-300 animate-slide-in-right">
-              <p>This chart shows the total number of registered users over time, with the green line indicating new registrations within each period.</p>
-              <p className="mt-2">Highlighted points show periods of significant growth.</p>
-            </div>
-          )}
-          <div className="text-sm text-gray-500 dark:text-gray-400 mt-1 flex items-center">
-            <Calendar className="w-3.5 h-3.5 mr-1.5 text-gray-400" />
-            <span>
-              {timeFilter === 'week' ? 'Last 7 days' : 
-              timeFilter === 'month' ? 'Last 30 days' : 
-              `${new Date().getFullYear()} overview`}
-            </span>
+    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-md border border-gray-100 dark:border-gray-700 overflow-hidden">
+      <div className="px-4 sm:px-6 py-4 sm:py-5 border-b border-gray-100 dark:border-gray-700">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0">
+          <div className="relative">
+            <h3 className="text-base font-medium text-gray-900 dark:text-white flex items-center">
+              <TrendingUp className="w-4 sm:w-5 h-4 sm:h-5 mr-1.5 sm:mr-2 text-blue-600 dark:text-blue-400" />
+              User Growth Trends
+              <button 
+                ref={infoButtonRef}
+                className="ml-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 focus:outline-none"
+                onClick={() => setShowInfoTooltip(!showInfoTooltip)}
+                aria-label="Information about user growth"
+              >
+                <Info className="w-3.5 sm:w-4 h-3.5 sm:h-4" />
+              </button>
+            </h3>
+            {showInfoTooltip && (
+              <div className="absolute z-10 mt-2 w-60 sm:w-64 bg-white dark:bg-gray-800 rounded-lg shadow-lg p-3 border border-gray-200 dark:border-gray-700 text-xs text-gray-600 dark:text-gray-300 animate-slide-in-right left-0 sm:left-auto">
+                <p>This chart shows the total number of registered users over time, with the green line indicating new registrations within each period.</p>
+                <p className="mt-2">Highlighted points show periods of significant growth.</p>
+              </div>
+            )}
           </div>
+          <TimeFilter selected={timeFilter} onChange={setTimeFilter} isMobile={isMobile} />
         </div>
-        <TimeFilter selected={timeFilter} onChange={handleTimeFilterChange} isMobile={isMobile} />
       </div>
 
-      <div className="bg-gray-50 dark:bg-gray-850 rounded-xl p-4 mb-4">
-        <div className={`h-60 sm:h-[320px] ${isMobile ? 'mx-[-0.5rem]' : ''}`}>
-          <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart
-              data={chartData}
-              margin={isMobile ? { top: 15, right: 5, left: 0, bottom: 10 } : { top: 20, right: 20, left: 10, bottom: 10 }}
-              onMouseMove={handleMouseMove}
-              onMouseLeave={handleMouseLeave}
-              onClick={(e) => e && e.activeTooltipIndex !== undefined && setHoveredPoint(e.activeTooltipIndex)}
-            >
-              {/* Reference area for hovered point */}
-              {hoveredPoint !== null && (
-                <ReferenceArea
-                  x1={chartData[hoveredPoint]?.name}
-                  x2={chartData[hoveredPoint]?.name}
-                  strokeOpacity={0.3}
-                  fill="#3b82f6"
-                  fillOpacity={0.1}
-                />
+      <div className="px-3 sm:px-6 py-3 sm:py-5">
+        <div className="bg-gray-50 dark:bg-gray-850 rounded-xl p-3 sm:p-5">
+          <div className="h-60 sm:h-80 md:h-96 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              {chartType === 'bar' ? (
+                <ComposedChart
+                  data={chartData}
+                  margin={{ top: 15, right: isMobile ? 5 : 30, left: isMobile ? 0 : 10, bottom: isMobile ? 5 : 10 }}
+                  onMouseMove={handleMouseMove}
+                  onMouseLeave={handleMouseLeave}
+                >
+                  <defs>
+                    <linearGradient id="colorUsers" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#3B82F6" stopOpacity={0.05} />
+                    </linearGradient>
+                    <linearGradient id="colorActiveUsers" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#8B5CF6" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#8B5CF6" stopOpacity={0.05} />
+                    </linearGradient>
+                    <linearGradient id="colorNewUsers" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#10B981" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#10B981" stopOpacity={0.05} />
+                    </linearGradient>
+                    <filter id="shadow" height="200%">
+                      <feDropShadow dx="0" dy="3" stdDeviation="3" floodOpacity="0.1"/>
+                    </filter>
+                  </defs>
+                  <CartesianGrid 
+                    strokeDasharray="3 3" 
+                    vertical={false} 
+                    stroke="#E5E7EB" 
+                    strokeOpacity={0.5}
+                  />
+                  <XAxis
+                    dataKey="name"
+                    tick={{ fontSize: isMobile ? 10 : 12, fill: '#6B7280' }}
+                    axisLine={{ stroke: '#E5E7EB', strokeOpacity: 0.6 }}
+                    tickLine={false}
+                    padding={{ left: 5, right: 5 }}
+                    interval={isMobile ? 1 : 0}
+                  />
+                  <YAxis
+                    tick={{ fontSize: isMobile ? 10 : 12, fill: '#6B7280' }}
+                    axisLine={false}
+                    tickLine={false}
+                    tickFormatter={(value) => isMobile && value > 999 ? `${(value/1000).toFixed(0)}k` : value.toLocaleString()}
+                    width={isMobile ? 30 : 40}
+                    domain={['auto', 'auto']}
+                    padding={{ top: 10, bottom: 0 }}
+                  />
+                  <Tooltip 
+                    content={<CustomTooltip />} 
+                    cursor={{ stroke: '#9CA3AF', strokeWidth: 1, strokeDasharray: '3 3' }}
+                    wrapperStyle={{ 
+                      filter: 'drop-shadow(0px 2px 8px rgba(0, 0, 0, 0.12))',
+                      borderRadius: '8px',
+                      overflow: 'hidden',
+                      transition: 'all 0.3s ease'
+                    }}
+                  />
+                  <Legend 
+                    verticalAlign="top"
+                    height={30}
+                    iconType="circle"
+                    iconSize={isMobile ? 5 : 8}
+                    wrapperStyle={{ 
+                      paddingBottom: isMobile ? '5px' : '15px',
+                      fontSize: isMobile ? '8px' : '12px',
+                      color: '#6B7280'
+                    }}
+                  />
+                  <Bar
+                    dataKey="users"
+                    name="Total Users"
+                    fill="#3B82F6"
+                    radius={[4, 4, 0, 0]}
+                    barSize={timeFilter === 'week' ? 12 : 24}
+                    isAnimationActive={animationActive}
+                    animationDuration={2000}
+                  />
+                  <Bar
+                    dataKey="newUsers"
+                    name="New Registrations" 
+                    fill="#10B981"
+                    radius={[4, 4, 0, 0]}
+                    barSize={timeFilter === 'week' ? 10 : 20}
+                    isAnimationActive={animationActive}
+                    animationDuration={2000}
+                  />
+                  <Bar
+                    dataKey="activeUsers"
+                    name="Active Users"
+                    fill="#8B5CF6"
+                    radius={[4, 4, 0, 0]}
+                    barSize={timeFilter === 'week' ? 8 : 16}
+                    isAnimationActive={animationActive}
+                    animationDuration={2000}
+                  />
+                  {getTodayIndex() !== null && (
+                    <ReferenceLine
+                      x={getTodayIndex()}
+                      stroke="#F59E0B"
+                      strokeWidth={2}
+                      strokeDasharray="3 3"
+                      label={{ 
+                        value: 'Today', 
+                        position: 'insideTopRight', 
+                        fill: '#F59E0B', 
+                        fontSize: 12,
+                        fontWeight: 500,
+                        dy: -8,
+                        dx: 6
+                      }}
+                    />
+                  )}
+                  <Brush dataKey="name" height={20} stroke="#3B82F6" />
+                </ComposedChart>
+              ) : (
+                <ComposedChart
+                  data={chartData}
+                  margin={{ top: 15, right: isMobile ? 5 : 30, left: isMobile ? 0 : 10, bottom: isMobile ? 5 : 10 }}
+                  onMouseMove={handleMouseMove}
+                  onMouseLeave={handleMouseLeave}
+                >
+                  <defs>
+                    <linearGradient id="colorUsers" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#3B82F6" stopOpacity={0.05} />
+                    </linearGradient>
+                    <linearGradient id="colorActiveUsers" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#8B5CF6" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#8B5CF6" stopOpacity={0.05} />
+                    </linearGradient>
+                    <linearGradient id="colorNewUsers" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#10B981" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#10B981" stopOpacity={0.05} />
+                    </linearGradient>
+                    <filter id="shadow" height="200%">
+                      <feDropShadow dx="0" dy="3" stdDeviation="3" floodOpacity="0.1"/>
+                    </filter>
+                  </defs>
+                  <CartesianGrid 
+                    strokeDasharray="3 3" 
+                    vertical={false} 
+                    stroke="#E5E7EB" 
+                    strokeOpacity={0.5}
+                  />
+                  <XAxis
+                    dataKey="name"
+                    tick={{ fontSize: isMobile ? 10 : 12, fill: '#6B7280' }}
+                    axisLine={{ stroke: '#E5E7EB', strokeOpacity: 0.6 }}
+                    tickLine={false}
+                    padding={{ left: 5, right: 5 }}
+                    interval={isMobile ? 1 : 0}
+                  />
+                  <YAxis
+                    tick={{ fontSize: isMobile ? 10 : 12, fill: '#6B7280' }}
+                    axisLine={false}
+                    tickLine={false}
+                    tickFormatter={(value) => isMobile && value > 999 ? `${(value/1000).toFixed(0)}k` : value.toLocaleString()}
+                    width={isMobile ? 30 : 40}
+                    domain={['auto', 'auto']}
+                    padding={{ top: 10, bottom: 0 }}
+                  />
+                  <Tooltip 
+                    content={<CustomTooltip />} 
+                    cursor={{ stroke: '#9CA3AF', strokeWidth: 1, strokeDasharray: '3 3' }}
+                    wrapperStyle={{ 
+                      filter: 'drop-shadow(0px 2px 8px rgba(0, 0, 0, 0.12))',
+                      borderRadius: '8px',
+                      overflow: 'hidden',
+                      transition: 'all 0.3s ease'
+                    }}
+                  />
+                  <Legend 
+                    verticalAlign="top"
+                    height={30}
+                    iconType="circle"
+                    iconSize={isMobile ? 5 : 8}
+                    wrapperStyle={{ 
+                      paddingBottom: isMobile ? '5px' : '15px',
+                      fontSize: isMobile ? '8px' : '12px',
+                      color: '#6B7280'
+                    }}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="users"
+                    stroke="#3B82F6"
+                    strokeWidth={2}
+                    fillOpacity={1}
+                    fill="url(#colorUsers)"
+                    activeDot={{ r: 6, fill: "#3B82F6", stroke: "#fff", strokeWidth: 2 }}
+                    isAnimationActive={animationActive}
+                    animationDuration={2000}
+                    name="Total Users"
+                  />
+                  {getTodayIndex() !== null && (
+                    <ReferenceLine
+                      x={getTodayIndex()}
+                      stroke="#F59E0B"
+                      strokeWidth={2}
+                      strokeDasharray="3 3"
+                      label={{ 
+                        value: 'Today', 
+                        position: 'insideTopRight', 
+                        fill: '#F59E0B', 
+                        fontSize: 12,
+                        fontWeight: 500,
+                        dy: -8,
+                        dx: 6
+                      }}
+                    />
+                  )}
+                  <Line
+                    type="monotone"
+                    dataKey="newUsers"
+                    name="New Registrations"
+                    stroke="#10B981"
+                    strokeWidth={2.5}
+                    dot={{ r: 3, fill: "#10B981", stroke: "#fff", strokeWidth: 1.5 }}
+                    activeDot={{ 
+                      r: 6, 
+                      fill: "#10B981", 
+                      stroke: "#fff", 
+                      strokeWidth: 2,
+                      filter: 'url(#shadow)'
+                    }}
+                    isAnimationActive={animationActive}
+                    animationDuration={2000}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="activeUsers"
+                    name="Active Users"
+                    stroke="#8B5CF6"
+                    strokeWidth={2.5}
+                    dot={{ r: 3, fill: "#8B5CF6", stroke: "#fff", strokeWidth: 1.5 }}
+                    activeDot={{ 
+                      r: 6, 
+                      fill: "#8B5CF6", 
+                      stroke: "#fff", 
+                      strokeWidth: 2,
+                      filter: 'url(#shadow)'
+                    }}
+                    isAnimationActive={animationActive}
+                    animationDuration={2000}
+                  />
+                </ComposedChart>
               )}
-              
-              <CartesianGrid stroke="#e5e7eb" strokeDasharray="5 5" vertical={false} strokeOpacity={0.6} />
-              <XAxis 
-                dataKey="name" 
-                tick={{ fill: '#6b7280', fontSize: isMobile ? 10 : 12 }}
-                axisLine={{ stroke: '#e5e7eb' }}
-                tickLine={{ stroke: '#e5e7eb' }}
-                dy={10}
-                angle={isMobile ? (timeFilter === 'year' ? 0 : -45) : 0}
-                textAnchor={isMobile && timeFilter !== 'year' ? "end" : "middle"}
-                height={isMobile ? 35 : 50}
-                interval={isMobile ? (timeFilter === 'year' ? 1 : 0) : 0}
-              />
-              <YAxis 
-                tick={{ fill: '#6b7280', fontSize: isMobile ? 10 : 12 }}
-                axisLine={{ stroke: '#e5e7eb' }}
-                tickLine={{ stroke: '#e5e7eb' }}
-                width={isMobile ? 30 : 40}
-                tickFormatter={(value) => value.toLocaleString()}
-              />
-              <Tooltip 
-                content={CustomTooltip} 
-                cursor={false} 
-                position={{ y: 0 }}
-                isAnimationActive={true}
-                wrapperStyle={{ zIndex: 10, touchAction: 'auto' }}
-              />
-              
-              {/* Only show brush on desktop in year view */}
-              {!isMobile && timeFilter === 'year' && (
-                <Brush 
-                  dataKey="name"
-                  height={30}
-                  stroke="#3b82f6"
-                  fill="#f9fafb"
-                  fillOpacity={0.8}
-                  travellerWidth={10}
-                  startIndex={6}
-                />
-              )}
-              
-              <defs>
-                <linearGradient id="colorUsers" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.4} />
-                  <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                </linearGradient>
-                <linearGradient id="colorNewUsers" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.2} />
-                  <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              
-              <Area
-                type="monotone"
-                dataKey="users"
-                stroke="none"
-                fillOpacity={1}
-                fill="url(#colorUsers)"
-                isAnimationActive={animationActive}
-                animationDuration={2000}
-                animationEasing="ease-out"
-              />
-              
-              <Line
-                type="monotone"
-                dataKey="users"
-                stroke="#3b82f6"
-                strokeWidth={isMobile ? 2 : 3}
-                dot={false}
-                activeDot={{ 
-                  r: isMobile ? 6 : 8, 
-                  fill: "#3b82f6", 
-                  stroke: "#fff", 
-                  strokeWidth: 2 
-                }}
-                isAnimationActive={animationActive}
-                animationDuration={2000}
-                animationEasing="ease-out"
-              />
-              
-              {/* Significant growth points - conditionally rendered */}
-              {significantPoints.map(index => (
-                <ReferenceDot
-                  key={`ref-dot-${index}`}
-                  x={chartData[index].name}
-                  y={chartData[index].users}
-                  r={isMobile ? 4 : 5}
-                  fill="#3b82f6"
-                  stroke="#fff"
-                  strokeWidth={2}
-                  isFront={true}
-                />
-              ))}
-
-              {/* Highlight max growth point with special marker */}
-              {maxGrowthPoint !== null && (
-                <ReferenceDot
-                  key="max-growth"
-                  x={chartData[maxGrowthPoint].name}
-                  y={chartData[maxGrowthPoint].users}
-                  r={isMobile ? 5 : 7}
-                  fill="#ec4899"
-                  stroke="#fff"
-                  strokeWidth={2}
-                  isFront={true}
-                  className="animate-pulse-glow"
-                />
-              )}
-              
-              {/* Line showing new users count - conditionally rendered based on screen size */}
-              {(!isMobile || timeFilter !== 'year') && (
-                <Line
-                  type="monotone"
-                  dataKey="newUsers"
-                  stroke="#10b981"
-                  strokeWidth={isMobile ? 1 : 1.5}
-                  strokeDasharray="3 3"
-                  dot={{ r: isMobile ? 2 : 3, fill: "#10b981", stroke: "#fff", strokeWidth: 1 }}
-                  activeDot={{ r: isMobile ? 4 : 6 }}
-                  isAnimationActive={animationActive}
-                  animationDuration={2000}
-                  animationEasing="ease-out"
-                  hide={isInitialLoad} // Hide on initial load
-                />
-              )}
-              
-              {/* Add Area for new users trend */}
-              {(!isMobile || timeFilter !== 'year') && (
-                <Area
-                  type="monotone"
-                  dataKey="newUsers"
-                  stroke="none"
-                  fillOpacity={1}
-                  fill="url(#colorNewUsers)"
-                  isAnimationActive={animationActive}
-                  animationDuration={2000}
-                  animationEasing="ease-out"
-                  hide={isInitialLoad} // Hide on initial load
-                />
-              )}
-            </ComposedChart>
-          </ResponsiveContainer>
+            </ResponsiveContainer>
+          </div>
         </div>
       </div>
 
       {/* Legend and statistics panel */}
-      <div className="mt-4 bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 overflow-hidden">
-        {/* Legend */}
-        <div className="px-5 py-3 border-b border-gray-200 dark:border-gray-700 flex flex-wrap items-center gap-6">
-          <div className="flex items-center">
-            <span className="w-3 h-3 rounded-full bg-blue-500 mr-2"></span>
-            <span className="text-sm text-gray-700 dark:text-gray-300 font-medium">Total users</span>
-          </div>
-          
-          <div className="flex items-center">
-            <span className="w-3 h-3 rounded-full bg-emerald-500 mr-2"></span>
-            <span className="text-sm text-gray-700 dark:text-gray-300 font-medium">New registrations</span>
-          </div>
-          
-          {maxGrowthPoint !== null && (
+      <div className="px-3 sm:px-6 pt-3 sm:pt-4 pb-4 sm:pb-5">
+        <div className="rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+          {/* Legend */}
+          <div className="px-3 sm:px-5 py-2 sm:py-3 border-b border-gray-200 dark:border-gray-700 flex flex-wrap items-center gap-3 sm:gap-8 bg-gray-50 dark:bg-gray-850">
             <div className="flex items-center">
-              <span className="w-3 h-3 rounded-full bg-pink-500 mr-2"></span>
-              <span className="text-sm text-gray-700 dark:text-gray-300 font-medium">Peak growth</span>
+              <span className="w-2.5 sm:w-3 h-2.5 sm:h-3 rounded-full bg-blue-500 mr-1.5 sm:mr-2"></span>
+              <span className="text-xs sm:text-sm text-gray-700 dark:text-gray-300">Total users</span>
+            </div>
+            
+            <div className="flex items-center">
+              <span className="w-2.5 sm:w-3 h-2.5 sm:h-3 rounded-full bg-emerald-500 mr-1.5 sm:mr-2" style={{ backgroundColor: "#10B981" }}></span>
+              <span className="text-xs sm:text-sm text-gray-700 dark:text-gray-300">New registrations</span>
+            </div>
+            
+            <div className="flex items-center">
+              <span className="w-2.5 sm:w-3 h-2.5 sm:h-3 rounded-full bg-purple-500 mr-1.5 sm:mr-2" style={{ backgroundColor: "#8B5CF6" }}></span>
+              <span className="text-xs sm:text-sm text-gray-700 dark:text-gray-300">Active users</span>
+            </div>
+            
+            {maxGrowthPoint !== null && (
+              <div className="flex items-center">
+                <span className="w-2.5 sm:w-3 h-2.5 sm:h-3 rounded-full bg-pink-500 mr-1.5 sm:mr-2"></span>
+                <span className="text-xs sm:text-sm text-gray-700 dark:text-gray-300">Peak growth</span>
+              </div>
+            )}
+          </div>
+          
+          {/* Statistics */}
+          {chartData.length > 0 && (
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center px-3 sm:px-5 py-3 sm:py-4 gap-2 sm:gap-3 bg-white dark:bg-gray-800">
+              <div className="flex flex-col">
+                <div className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white flex items-baseline gap-2">
+                  {chartData[chartData.length - 1].users.toLocaleString()}
+                  <span className="text-xs sm:text-sm font-medium text-gray-500">total users</span>
+                </div>
+              </div>
+
+              <div className="flex items-center bg-gray-50 dark:bg-gray-700 px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg">
+                <span className="text-emerald-600 dark:text-emerald-400 text-xs sm:text-sm font-medium flex items-center">
+                  <ArrowUpRight className="w-3.5 sm:w-4 h-3.5 sm:h-4 mr-1 sm:mr-1.5" />
+                  +{totalNewUsers.toLocaleString()}
+                </span>
+                <span className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 ml-1 sm:ml-1.5">new in this period</span>
+              </div>
             </div>
           )}
         </div>
-        
-        {/* Statistics */}
-        {chartData.length > 0 && (
-          <div className="flex justify-between items-center px-5 py-3">
-            <div className="flex flex-col">
-              <div className="text-lg font-bold text-gray-900 dark:text-white flex items-baseline gap-2">
-                {chartData[chartData.length - 1].users.toLocaleString()}
-                <span className="text-sm font-medium text-gray-500">total users</span>
-              </div>
-            </div>
-
-            <div className="flex items-center bg-gray-50 dark:bg-gray-700 px-4 py-2 rounded-lg">
-              <span className="text-emerald-600 dark:text-emerald-400 font-medium flex items-center">
-                <ArrowUpRight className="w-4 h-4 mr-1" />
-                +{totalNewUsers.toLocaleString()}
-              </span>
-              <span className="text-sm text-gray-600 dark:text-gray-400 ml-1">new in this period</span>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

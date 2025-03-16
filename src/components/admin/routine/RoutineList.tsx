@@ -5,7 +5,10 @@ import { Search, Trash2, Edit2, Plus, Clock, MapPin, Filter, Download, Printer,
   Users,
   BookOpen,
   GraduationCap,
-  Building } from 'lucide-react';
+  Building,
+  Check,
+  Power,
+  PowerOff } from 'lucide-react';
 import { RoutineSlotModal } from './RoutineSlotModal';
 import type { Routine, RoutineSlot } from '../../../types/routine';
 import type { Course } from '../../../types/course';
@@ -19,9 +22,11 @@ interface RoutineListProps {
   onSelectRoutine: (routine: Routine | null) => void;
   onUpdateRoutine: (id: string, updates: Partial<Routine>) => Promise<void>;
   onDeleteRoutine: (id: string) => Promise<void>;
-  onAddSlot: (routineId: string, slot: Omit<RoutineSlot, 'id' | 'routineId' | 'createdAt'>) => Promise<void>;
+  onAddSlot: (routineId: string, slot: Omit<RoutineSlot, 'id' | 'routineId' | 'createdAt'>) => Promise<RoutineSlot>;
   onUpdateSlot: (routineId: string, slotId: string, updates: Partial<RoutineSlot>) => Promise<void>;
   onDeleteSlot: (routineId: string, slotId: string) => Promise<void>;
+  onActivateRoutine: (routineId: string) => Promise<void>;
+  onDeactivateRoutine: (routineId: string) => Promise<void>;
 }
 
 export function RoutineList({
@@ -34,11 +39,15 @@ export function RoutineList({
   onDeleteRoutine,
   onAddSlot,
   onUpdateSlot,
-  onDeleteSlot
+  onDeleteSlot,
+  onActivateRoutine,
+  onDeactivateRoutine
 }: RoutineListProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [showSlotModal, setShowSlotModal] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<RoutineSlot | null>(null);
+  const [isActivating, setIsActivating] = useState<string | null>(null);
+  const [isDeactivating, setIsDeactivating] = useState<string | null>(null);
 
   const filteredRoutines = routines.filter(routine =>
     routine.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -56,6 +65,28 @@ export function RoutineList({
     setShowSlotModal(true);
   };
 
+  const handleActivateRoutine = async (routineId: string) => {
+    try {
+      setIsActivating(routineId);
+      await onActivateRoutine(routineId);
+    } catch (error) {
+      console.error('Failed to activate routine:', error);
+    } finally {
+      setIsActivating(null);
+    }
+  };
+
+  const handleDeactivateRoutine = async (routineId: string) => {
+    try {
+      setIsDeactivating(routineId);
+      await onDeactivateRoutine(routineId);
+    } catch (error) {
+      console.error('Failed to deactivate routine:', error);
+    } finally {
+      setIsDeactivating(null);
+    }
+  };
+
   return (
     <>
       <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm overflow-hidden mt-6">
@@ -71,27 +102,86 @@ export function RoutineList({
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
           </div>
 
+          <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl mb-6">
+            <div className="flex items-start gap-3">
+              <div className="p-1 bg-blue-100 dark:bg-blue-800/40 rounded-full mt-0.5">
+                <Check className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+              </div>
+              <div>
+                <h4 className="text-sm font-medium text-blue-800 dark:text-blue-300">Managing Routines</h4>
+                <p className="text-xs text-blue-700 dark:text-blue-400 mt-1">
+                  Only one routine can be active at a time. The active routine (highlighted in green) will be shown to users.
+                  Use the <PowerOff className="w-3 h-3 inline mx-1" /> button to deactivate a routine or the <Power className="w-3 h-3 inline mx-1" /> button to activate one.
+                </p>
+              </div>
+            </div>
+          </div>
+
           <div className="space-y-4">
             {filteredRoutines.map((routine) => (
               <div
                 key={routine.id}
                 className={`
-                  bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700
+                  bg-white dark:bg-gray-800 rounded-xl border ${routine.isActive 
+                    ? 'border-green-200 dark:border-green-800' 
+                    : 'border-gray-100 dark:border-gray-700'
+                  }
                   hover:border-blue-200 dark:hover:border-blue-700 transition-all duration-200
                   ${selectedRoutine?.id === routine.id ? 'ring-2 ring-blue-500' : ''}
                 `}
               >
                 <div className="p-4">
                   <div className="flex items-center justify-between mb-4">
-                    <div>
-                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                        {routine.name}
-                      </h3>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">
-                        Semester: {routine.semester}
-                      </p>
+                    <div className="flex items-center">
+                      {routine.isActive && (
+                        <div className="mr-2 p-1 bg-green-100 dark:bg-green-900/30 rounded-full">
+                          <Check className="w-4 h-4 text-green-600 dark:text-green-400" />
+                        </div>
+                      )}
+                      <div>
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
+                          {routine.name}
+                          {routine.isActive && (
+                            <span className="ml-2 text-xs font-medium px-2 py-0.5 rounded-full bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300">
+                              Active
+                            </span>
+                          )}
+                        </h3>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                          Semester: {routine.semester}
+                        </p>
+                      </div>
                     </div>
                     <div className="flex items-center gap-2">
+                      {routine.isActive ? (
+                        <button
+                          onClick={() => handleDeactivateRoutine(routine.id)}
+                          disabled={isDeactivating === routine.id}
+                          className={`
+                            p-2 text-orange-600 dark:text-orange-400 
+                            hover:bg-orange-50 dark:hover:bg-orange-900/20 
+                            rounded-lg transition-colors
+                            ${isDeactivating === routine.id ? 'opacity-50 cursor-not-allowed' : ''}
+                          `}
+                          title="Deactivate this routine"
+                        >
+                          <PowerOff className="w-4 h-4" />
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleActivateRoutine(routine.id)}
+                          disabled={isActivating === routine.id}
+                          className={`
+                            p-2 text-green-600 dark:text-green-400 
+                            hover:bg-green-50 dark:hover:bg-green-900/20 
+                            rounded-lg transition-colors
+                            ${isActivating === routine.id ? 'opacity-50 cursor-not-allowed' : ''}
+                          `}
+                          title="Activate this routine"
+                        >
+                          <Power className="w-4 h-4" />
+                        </button>
+                      )}
                       <button
                         onClick={() => onSelectRoutine(routine)}
                         className="p-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"

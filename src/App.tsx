@@ -3,6 +3,7 @@ import { useAuth } from './hooks/useAuth';
 import { useTasks } from './hooks/useTasks';
 import { useUsers } from './hooks/useUsers';
 import { useNotifications } from './hooks/useNotifications';
+import { useRoutines } from './hooks/useRoutines';
 import { AuthPage } from './pages/AuthPage';
 import { AdminDashboard } from './pages/AdminDashboard';
 import { Navigation } from './components/Navigation';
@@ -41,6 +42,11 @@ export default function App() {
     refreshTasks,
     syncOfflineChanges
   } = useTasks(user?.id);
+  const {
+    routines,
+    loading: routinesLoading,
+    syncOfflineChanges: syncRoutineChanges
+  } = useRoutines();
   const { 
     notifications, 
     unreadCount,
@@ -90,6 +96,20 @@ export default function App() {
       }
     }).length;
   }, [tasks]);
+
+  // Handle syncing all offline changes when coming back online
+  const syncAllOfflineChanges = async () => {
+    try {
+      console.log('Syncing all offline changes...');
+      // Sync tasks
+      await syncOfflineChanges();
+      // Sync routines
+      await syncRoutineChanges();
+      console.log('All offline changes synced successfully');
+    } catch (error) {
+      console.error('Error syncing offline changes:', error);
+    }
+  };
 
   if (isLoading || authLoading || (user?.role === 'admin' && usersLoading)) {
     return <LoadingScreen />;
@@ -368,7 +388,7 @@ export default function App() {
       <InstallPWA />
       <OfflineIndicator />
       <OfflineToast />
-      <OfflineSyncManager onSync={syncOfflineChanges} />
+      <OfflineSyncManager onSync={syncAllOfflineChanges} />
     </div>
   );
 }

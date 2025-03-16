@@ -11,6 +11,7 @@ import { StudyMaterialManager } from '../components/admin/study-materials/StudyM
 import { RoutineManager } from '../components/admin/routine/RoutineManager';
 import { TeacherManager } from '../components/admin/teacher/TeacherManager';
 import { Dashboard } from '../components/admin/dashboard/Dashboard';
+import { UserActiveGraph } from '../components/admin/dashboard/UserActiveGraph';
 import { useAnnouncements } from '../hooks/useAnnouncements';
 import { useCourses } from '../hooks/useCourses';
 import { useRoutines } from '../hooks/useRoutines';
@@ -62,7 +63,9 @@ export function AdminDashboard({
     deleteRoutine,
     addRoutineSlot,
     updateRoutineSlot,
-    deleteRoutineSlot
+    deleteRoutineSlot,
+    activateRoutine,
+    deactivateRoutine
   } = useRoutines();
 
   const {
@@ -114,7 +117,16 @@ export function AdminDashboard({
           {activeTab === 'users' && (
             <>
               <UserStats users={users} tasks={tasks} />
-              <UserActivity users={users} />
+              
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+                <div className="lg:col-span-2">
+                  <UserActiveGraph users={users} />
+                </div>
+                <div className="lg:col-span-1">
+                  <UserActivity users={users} />
+                </div>
+              </div>
+              
               <UserList users={users} onDeleteUser={handleDeleteUser} />
             </>
           )}
@@ -187,6 +199,8 @@ export function AdminDashboard({
               onAddSlot={addRoutineSlot}
               onUpdateSlot={updateRoutineSlot}
               onDeleteSlot={deleteRoutineSlot}
+              onActivateRoutine={activateRoutine}
+              onDeactivateRoutine={deactivateRoutine}
             />
           )}
         </div>

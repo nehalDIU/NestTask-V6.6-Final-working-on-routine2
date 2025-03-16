@@ -3,7 +3,7 @@ import { CalendarDays, Plus } from 'lucide-react';
 import type { Routine } from '../../../types/routine';
 
 interface RoutineFormProps {
-  onSubmit: (routine: Omit<Routine, 'id' | 'createdAt'>) => Promise<void>;
+  onSubmit: (routine: Omit<Routine, 'id' | 'createdAt'>) => Promise<Routine>;
 }
 
 export function RoutineForm({ onSubmit }: RoutineFormProps) {

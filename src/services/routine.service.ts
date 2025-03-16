@@ -216,3 +216,43 @@ export async function deleteRoutineSlot(routineId: string, slotId: string): Prom
     throw error;
   }
 }
+
+/**
+ * Activates a specific routine and deactivates all others
+ * @param routineId The ID of the routine to activate
+ * @returns Promise that resolves when the routine is activated
+ */
+export async function activateRoutine(routineId: string): Promise<void> {
+  try {
+    // Get all routines
+    const routines = await fetchRoutines();
+    
+    // Deactivate all routines
+    for (const routine of routines) {
+      if (routine.isActive && routine.id !== routineId) {
+        await updateRoutine(routine.id, { isActive: false });
+      }
+    }
+    
+    // Activate the selected routine
+    await updateRoutine(routineId, { isActive: true });
+    
+  } catch (error) {
+    console.error('Error activating routine:', error);
+    throw error;
+  }
+}
+
+/**
+ * Deactivates a specific routine without activating others
+ * @param routineId The ID of the routine to deactivate
+ * @returns Promise that resolves when the routine is deactivated
+ */
+export async function deactivateRoutine(routineId: string): Promise<void> {
+  try {
+    await updateRoutine(routineId, { isActive: false });
+  } catch (error) {
+    console.error('Error deactivating routine:', error);
+    throw error;
+  }
+}

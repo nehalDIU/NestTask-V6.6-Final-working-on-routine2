@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { useRoutines } from '../hooks/useRoutines';
 import { useCourses } from '../hooks/useCourses';
 import { useTeachers } from '../hooks/useTeachers';
+import { useAuth } from '../hooks/useAuth';
 import { format, addDays, startOfWeek } from 'date-fns';
 import { 
   Calendar, 
@@ -17,7 +18,8 @@ import {
   User,
   Info,
   Code,
-  ExternalLink
+  ExternalLink,
+  Plus
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { TeacherDetailsModal } from './TeacherDetailsModal';
@@ -28,14 +30,36 @@ export function RoutinePage() {
   const { routines, loading } = useRoutines();
   const { courses } = useCourses();
   const { teachers } = useTeachers();
+  const { user } = useAuth();
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedSection, setSelectedSection] = useState<string>('');
   const [selectedTeacher, setSelectedTeacher] = useState<Teacher | null>(null);
   const [enrichedSlots, setEnrichedSlots] = useState<any[]>([]);
   const [showMobileSearch, setShowMobileSearch] = useState(false);
+  const [selectedRoutineId, setSelectedRoutineId] = useState<string>('');
 
-  const currentRoutine = routines.find(r => r.isActive) || routines[0];
+  const isAdmin = user?.role === 'admin';
+
+  const currentRoutine = useMemo(() => {
+    if (selectedRoutineId) {
+      return routines.find(r => r.id === selectedRoutineId);
+    }
+    return routines.find(r => r.isActive) || routines[0];
+  }, [routines, selectedRoutineId]);
+
+  useEffect(() => {
+    if (currentRoutine?.id && !selectedRoutineId) {
+      setSelectedRoutineId(currentRoutine.id);
+    }
+  }, [currentRoutine, selectedRoutineId]);
+
+  const handleRoutineChange = (routineId: string) => {
+    if (routineId === 'create-new') {
+      window.location.href = '/#admin?tab=routine';
+    } else {
+      setSelectedRoutineId(routineId);
+    }
+  };
 
   const weekDays = useMemo(() => {
     const start = startOfWeek(selectedDate, { weekStartsOn: 6 });
@@ -50,7 +74,6 @@ export function RoutinePage() {
     });
   }, [selectedDate]);
 
-  // Enrich slots with course and teacher data
   useEffect(() => {
     if (!currentRoutine?.slots) {
       setEnrichedSlots([]);
@@ -63,12 +86,9 @@ export function RoutinePage() {
       const course = slot.courseId ? courses.find(c => c.id === slot.courseId) : undefined;
       const teacher = slot.teacherId ? teachers.find(t => t.id === slot.teacherId) : undefined;
       
-      // Log teacher details for debugging
       console.log(`RoutinePage - Slot ${slot.id} - teacherId: ${slot.teacherId}, teacherName: ${slot.teacherName}, Found teacher:`, teacher?.name || "null");
       
-      // If courseName isn't set but we have a course, populate it
       const courseName = slot.courseName || (course ? course.name : undefined);
-      // Use directly stored teacherName with fallback to teacher.name
       const teacherName = slot.teacherName || (teacher ? teacher.name : undefined);
       
       return {
@@ -91,24 +111,11 @@ export function RoutinePage() {
         slot.roomNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         slot.teacher?.name?.toLowerCase().includes(searchTerm.toLowerCase());
       
-      const matchesSection = !selectedSection || slot.section === selectedSection;
-      
-      // Show only slots for the exactly selected day
       const matchesDay = format(selectedDate, 'EEEE') === slot.dayOfWeek;
       
-      return matchesSearch && matchesSection && matchesDay;
+      return matchesSearch && matchesDay;
     });
-  }, [enrichedSlots, searchTerm, selectedSection, selectedDate]);
-
-  const sections = useMemo(() => {
-    const uniqueSections = new Set<string>();
-    enrichedSlots.forEach(slot => {
-      if (slot.section) {
-        uniqueSections.add(slot.section);
-      }
-    });
-    return Array.from(uniqueSections).sort();
-  }, [enrichedSlots]);
+  }, [enrichedSlots, searchTerm, selectedDate]);
 
   if (loading) {
     return (
@@ -132,9 +139,7 @@ export function RoutinePage() {
 
   return (
     <div className="max-w-7xl mx-auto px-3 sm:px-4 py-4 sm:py-8">
-      {/* Header Section */}
       <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg mb-4 sm:mb-6 p-3 sm:p-4 shadow-sm">
-        {/* Mobile View Header */}
         <div className="flex flex-col space-y-3 md:hidden">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -154,8 +159,30 @@ export function RoutinePage() {
           <p className="text-sm text-gray-500 dark:text-gray-400">
             {currentRoutine.name} - {currentRoutine.semester}
           </p>
+
+          {routines.length > 0 && (
+            <div className="relative mt-1">
+              <select
+                value={selectedRoutineId}
+                onChange={(e) => handleRoutineChange(e.target.value)}
+                className="w-full pl-9 pr-8 py-2 border dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white text-sm appearance-none space-y-6 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors duration-200 cursor-pointer"
+              >
+                {routines.map(routine => (
+                  <option key={routine.id} value={routine.id}>
+                    {routine.name} - {routine.semester} {routine.isActive ? "(Active)" : ""}
+                  </option>
+                ))}
+                {isAdmin && (
+                  <option value="create-new" className="font-medium text-blue-600 dark:text-blue-400">
+                    + Create New Routine
+                  </option>
+                )}
+              </select>
+              <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <ChevronRight className="absolute right-2 top-1/2 transform -translate-y-1/2 rotate-90 text-gray-400 w-4 h-4" />
+            </div>
+          )}
           
-          {/* Mobile Search Input (toggle visibility with state) */}
           <AnimatePresence>
             {showMobileSearch && (
               <motion.div 
@@ -177,26 +204,8 @@ export function RoutinePage() {
               </motion.div>
             )}
           </AnimatePresence>
-          
-          {sections.length > 0 && (
-            <div className="relative mt-1">
-              <select
-                value={selectedSection}
-                onChange={(e) => setSelectedSection(e.target.value)}
-                className="w-full pl-9 pr-8 py-2 border dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white text-sm appearance-none"
-              >
-                <option value="">All Sections</option>
-                {sections.map(section => (
-                  <option key={section} value={section}>{section}</option>
-                ))}
-              </select>
-              <Users className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <ChevronRight className="absolute right-2 top-1/2 transform -translate-y-1/2 rotate-90 text-gray-400 w-4 h-4" />
-            </div>
-          )}
         </div>
 
-        {/* Desktop View Header */}
         <div className="hidden md:flex md:flex-row md:flex-wrap md:items-center md:justify-between gap-y-4">
           <div>
             <h1 className="text-xl lg:text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
@@ -209,19 +218,25 @@ export function RoutinePage() {
           </div>
 
           <div className="flex items-center gap-3 flex-wrap">
-            {sections.length > 0 && (
+            {routines.length > 0 && (
               <div className="relative">
                 <select
-                  value={selectedSection}
-                  onChange={(e) => setSelectedSection(e.target.value)}
-                  className="pl-10 pr-4 py-2 border dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white appearance-none"
+                  value={selectedRoutineId}
+                  onChange={(e) => handleRoutineChange(e.target.value)}
+                  className="pl-10 pr-4 py-2 border dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white appearance-none space-y-6 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors duration-200 cursor-pointer"
                 >
-                  <option value="">All Sections</option>
-                  {sections.map(section => (
-                    <option key={section} value={section}>{section}</option>
+                  {routines.map(routine => (
+                    <option key={routine.id} value={routine.id}>
+                      {routine.name} - {routine.semester} {routine.isActive ? "(Active)" : ""}
+                    </option>
                   ))}
+                  {isAdmin && (
+                    <option value="create-new" className="font-medium text-blue-600 dark:text-blue-400">
+                      + Create New Routine
+                    </option>
+                  )}
                 </select>
-                <Users className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
                 <ChevronRight className="absolute right-3 top-1/2 transform -translate-y-1/2 rotate-90 text-gray-400 w-4 h-4" />
               </div>
             )}
@@ -240,7 +255,6 @@ export function RoutinePage() {
         </div>
       </div>
 
-      {/* Calendar Strip */}
       <div className="mb-4 sm:mb-6">
         <div className="flex items-center justify-between mb-2 sm:mb-4">
           <button
@@ -306,7 +320,6 @@ export function RoutinePage() {
         </div>
       </div>
 
-      {/* Class Schedule */}
       <div className="space-y-2 sm:space-y-3">
         {filteredSlots.length === 0 ? (
           <div className="text-center py-8 sm:py-12 bg-white dark:bg-gray-800 rounded-xl shadow-sm">
@@ -316,7 +329,6 @@ export function RoutinePage() {
             </h3>
             <p className="text-sm sm:text-base text-gray-500 dark:text-gray-400 px-4">
               There are no classes scheduled for this day
-              {selectedSection && ` in section ${selectedSection}`}
               {searchTerm && ` matching "${searchTerm}"`}.
             </p>
           </div>
@@ -331,13 +343,11 @@ export function RoutinePage() {
                 className="bg-white dark:bg-gray-800 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-300 border border-gray-100 dark:border-gray-700/50"
               >
                 <div className="flex flex-row items-stretch h-full">
-                  {/* Time Column */}
                   <div className="w-[85px] sm:w-[120px] md:w-[180px] bg-gray-50 dark:bg-gray-800/40 flex flex-col justify-center items-center py-3 sm:py-5 md:py-6 px-2 sm:px-3 md:px-4 border-r border-gray-100 dark:border-gray-700/50">
                     <div className="text-xl sm:text-3xl md:text-4xl font-semibold text-gray-700 dark:text-gray-300">
                       {format(new Date(`2000-01-01T${slot.startTime}`), 'HH:mm')}
                     </div>
                     
-                    {/* Small lines for the separator */}
                     <div className="my-2 sm:my-3 md:my-4 w-10 sm:w-12 md:w-16 border-t border-gray-200 dark:border-gray-600"></div>
                     
                     <div className="text-xl sm:text-3xl md:text-4xl font-semibold text-gray-700 dark:text-gray-300">
@@ -345,7 +355,6 @@ export function RoutinePage() {
                     </div>
                   </div>
 
-                  {/* Content Column */}
                   <div className="flex-1 p-3 sm:p-5 md:p-8">
                     <h3 className="text-base sm:text-xl md:text-2xl font-medium text-slate-600 dark:text-slate-300 mb-2 sm:mb-4 md:mb-6">
                       {slot.courseName || (slot.course ? slot.course.name : 'No Course Name')}
@@ -368,7 +377,6 @@ export function RoutinePage() {
                           {slot.teacherId ? (
                             <button
                               onClick={() => {
-                                // Find the full teacher object for modal display
                                 const fullTeacher = teachers.find(t => t.id === slot.teacherId);
                                 setSelectedTeacher(fullTeacher || null);
                               }}
@@ -395,7 +403,6 @@ export function RoutinePage() {
         )}
       </div>
 
-      {/* Teacher Details Modal */}
       {selectedTeacher && (
         <TeacherDetailsModal
           teacher={selectedTeacher}

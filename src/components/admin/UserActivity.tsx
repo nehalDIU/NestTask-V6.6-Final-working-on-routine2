@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Activity } from 'lucide-react';
-import type { User } from '../types/auth';
+import { Activity, ChevronDown, ChevronUp } from 'lucide-react';
+import type { User } from '../../types/auth';
 
 interface UserActivityProps {
   users: User[];
@@ -8,6 +8,8 @@ interface UserActivityProps {
 
 export function UserActivity({ users }: UserActivityProps) {
   const [recentUsers, setRecentUsers] = useState<User[]>([]);
+  const [showAll, setShowAll] = useState(false);
+  const [sortedUsers, setSortedUsers] = useState<User[]>([]);
 
   useEffect(() => {
     // Sort users by last active timestamp, fallback to creation date
@@ -15,10 +17,12 @@ export function UserActivity({ users }: UserActivityProps) {
       const aTime = a.lastActive ? new Date(a.lastActive).getTime() : new Date(a.createdAt).getTime();
       const bTime = b.lastActive ? new Date(b.lastActive).getTime() : new Date(b.createdAt).getTime();
       return bTime - aTime; // Most recent first
-    }).slice(0, 5); // Get 5 most recent users
+    });
     
-    setRecentUsers(sorted);
-  }, [users]);
+    setSortedUsers(sorted);
+    // Only show top 5 unless showAll is true
+    setRecentUsers(showAll ? sorted : sorted.slice(0, 5));
+  }, [users, showAll]);
 
   // Format relative time
   const getRelativeTime = (timestamp: string) => {
@@ -37,11 +41,35 @@ export function UserActivity({ users }: UserActivityProps) {
     return `${days}d ago`;
   };
 
+  const toggleShowAll = () => {
+    setShowAll(!showAll);
+  };
+
   return (
     <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 sm:p-6 shadow-sm mb-8">
-      <div className="flex items-center gap-2 mb-4 sm:mb-6">
-        <Activity className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Recent Activity</h3>
+      <div className="flex items-center justify-between mb-4 sm:mb-6">
+        <div className="flex items-center gap-2">
+          <Activity className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Recent Activity</h3>
+        </div>
+        {sortedUsers.length > 5 && (
+          <button 
+            onClick={toggleShowAll}
+            className="flex items-center gap-1 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors"
+          >
+            {showAll ? (
+              <>
+                <span>Show Less</span>
+                <ChevronUp className="w-4 h-4" />
+              </>
+            ) : (
+              <>
+                <span>Show All</span>
+                <ChevronDown className="w-4 h-4" />
+              </>
+            )}
+          </button>
+        )}
       </div>
       
       {recentUsers.length === 0 ? (
@@ -81,6 +109,16 @@ export function UserActivity({ users }: UserActivityProps) {
             </div>
           ))}
         </div>
+      )}
+      
+      {!showAll && sortedUsers.length > 5 && (
+        <button 
+          onClick={toggleShowAll}
+          className="w-full mt-4 py-2 bg-gray-50 dark:bg-gray-700 rounded-lg text-sm text-gray-700 dark:text-gray-300 font-medium hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors flex items-center justify-center gap-1"
+        >
+          <span>View All Activities ({sortedUsers.length})</span>
+          <ChevronDown className="w-4 h-4" />
+        </button>
       )}
     </div>
   );

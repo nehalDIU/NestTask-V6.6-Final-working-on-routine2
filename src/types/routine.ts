@@ -11,6 +11,11 @@ export interface RoutineSlot {
   roomNumber?: string;
   section?: string;
   createdAt: string;
+  
+  // Offline tracking properties
+  _isOffline?: boolean;
+  _isOfflineUpdated?: boolean;
+  _isOfflineDeleted?: boolean;
 }
 
 export interface Routine {
@@ -20,6 +25,11 @@ export interface Routine {
   semester: string;
   isActive: boolean;
   createdAt: string;
-  createdBy: string;
+  createdBy?: string;
   slots?: RoutineSlot[];
+  
+  // Offline tracking properties
+  _isOffline?: boolean;
+  _isOfflineUpdated?: boolean;
+  _isOfflineDeleted?: boolean;
 }

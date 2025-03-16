@@ -212,6 +212,7 @@ export function useRoutines() {
   const addRoutineSlot = async (routineId: string, slot: Omit<RoutineSlot, 'id' | 'routineId' | 'createdAt'>) => {
     try {
       setError(null);
+      console.log('Adding routine slot:', { routineId, slot }); // Debug log
       
       if (isOffline) {
         // In offline mode, create temporary slot
@@ -248,46 +249,48 @@ export function useRoutines() {
                 : r
             )
           );
+          
+          return newSlot;
+        } else {
+          throw new Error('Routine not found');
         }
-        
-        return newSlot;
       } else {
-        // Online mode
+        // Online mode - add slot on server
         const newSlot = await addRoutineSlotService(routineId, slot);
+        console.log('New slot created:', newSlot); // Debug log
         
+        // Update routine in state
         setRoutines(prev =>
-          prev.map(routine =>
-            routine.id === routineId
+          prev.map(r =>
+            r.id === routineId
               ? {
-                  ...routine,
-                  slots: [...(routine.slots || []), newSlot]
+                  ...r,
+                  slots: [...(r.slots || []), newSlot]
                 }
-              : routine
+              : r
           )
         );
         
         // Update in IndexedDB
         try {
           const existingRoutines = await getAllFromIndexedDB(STORES.ROUTINES);
-          const routineIndex = existingRoutines.findIndex((r: Routine) => r.id === routineId);
+          const routineToUpdate = existingRoutines.find((r: Routine) => r.id === routineId);
           
-          if (routineIndex >= 0) {
-            const routine = existingRoutines[routineIndex];
+          if (routineToUpdate) {
             const updatedRoutine = {
-              ...routine,
-              slots: [...(routine.slots || []), newSlot]
+              ...routineToUpdate,
+              slots: [...(routineToUpdate.slots || []), newSlot]
             };
-            
-            existingRoutines[routineIndex] = updatedRoutine;
-            await saveToIndexedDB(STORES.ROUTINES, existingRoutines);
+            await saveToIndexedDB(STORES.ROUTINES, updatedRoutine);
           }
         } catch (dbErr) {
-          console.error('Error updating IndexedDB with new slot:', dbErr);
+          console.error('Error updating IndexedDB after adding slot:', dbErr);
         }
         
         return newSlot;
       }
     } catch (err: any) {
+      console.error('Error adding routine slot:', err);
       setError(err.message);
       throw err;
     }

@@ -35,8 +35,12 @@ export function RoutineSlotModal({
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [statusMessage, setStatusMessage] = useState<{type: 'error' | 'success'; message: string} | null>(null);
 
   useEffect(() => {
+    console.log('RoutineSlotModal opened with routineId:', routineId);
+    console.log('Initial form data:', formData);
+    
     // Update courseName when courseId changes
     if (formData.courseId) {
       const selectedCourse = courses.find(c => c.id === formData.courseId);
@@ -63,8 +67,11 @@ export function RoutineSlotModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
+    setStatusMessage(null);
     
     try {
+      console.log('Submitting form data:', { routineId, formData }); // Add logging to debug
+      
       if (slot) {
         // Edit existing slot - need to use the 3-parameter version
         const updateFn = onSubmit as (routineId: string, slotId: string, updates: Partial<RoutineSlot>) => Promise<void>;
@@ -72,11 +79,46 @@ export function RoutineSlotModal({
       } else {
         // Create new slot - need to use the 2-parameter version
         const createFn = onSubmit as (routineId: string, slot: Omit<RoutineSlot, 'id' | 'routineId' | 'createdAt'>) => Promise<RoutineSlot>;
+        // Ensure all required fields are present
+        if (!formData.dayOfWeek || !formData.startTime || !formData.endTime) {
+          console.error('Missing required fields:', { 
+            dayOfWeek: formData.dayOfWeek, 
+            startTime: formData.startTime, 
+            endTime: formData.endTime 
+          });
+          setStatusMessage({
+            type: 'error', 
+            message: 'Please fill in all required fields: Day, Start Time, and End Time'
+          });
+          throw new Error('Missing required fields');
+        }
+        
+        if (!routineId) {
+          console.error('Missing routineId');
+          setStatusMessage({
+            type: 'error', 
+            message: 'No routine selected. Please try again.'
+          });
+          throw new Error('No routine selected');
+        }
+        
         await createFn(routineId, formData);
+        setStatusMessage({
+          type: 'success', 
+          message: 'Time slot created successfully!'
+        });
       }
-      onClose();
+      // Short delay before closing to show success message
+      setTimeout(() => onClose(), 1000);
     } catch (error) {
       console.error('Error saving routine slot:', error);
+      if (!statusMessage) {
+        setStatusMessage({
+          type: 'error', 
+          message: 'Failed to save time slot. Please try again.'
+        });
+      }
+    } finally {
       setIsSubmitting(false);
     }
   };
@@ -99,6 +141,16 @@ export function RoutineSlotModal({
           </div>
           
           <form onSubmit={handleSubmit} className="space-y-4">
+            {statusMessage && (
+              <div className={`p-3 rounded-lg ${
+                statusMessage.type === 'error' 
+                ? 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400' 
+                : 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400'
+              }`}>
+                {statusMessage.message}
+              </div>
+            )}
+
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Day of Week

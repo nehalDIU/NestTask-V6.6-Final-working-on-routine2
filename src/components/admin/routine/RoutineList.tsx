@@ -55,7 +55,11 @@ export function RoutineList({
   );
 
   const handleAddSlot = () => {
-    if (!selectedRoutine) return;
+    if (!selectedRoutine) {
+      console.error('Cannot add slot: No routine selected');
+      return;
+    }
+    console.log('Opening add slot modal for routine:', selectedRoutine.id);
     setSelectedSlot(null);
     setShowSlotModal(true);
   };
@@ -244,7 +248,14 @@ export function RoutineList({
                   )}
 
                   <button
-                    onClick={handleAddSlot}
+                    onClick={() => {
+                      console.log('Add Time Slot clicked for routine:', routine.id);
+                      onSelectRoutine(routine);
+                      setTimeout(() => {
+                        setSelectedSlot(null);
+                        setShowSlotModal(true);
+                      }, 10);
+                    }}
                     className="mt-4 w-full flex items-center justify-center gap-2 px-4 py-2 text-sm text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
                   >
                     <Plus className="w-4 h-4" />

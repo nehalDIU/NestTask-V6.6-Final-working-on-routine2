@@ -123,8 +123,31 @@ export async function addRoutineSlot(
   slot: Omit<RoutineSlot, 'id' | 'routineId' | 'createdAt'>
 ): Promise<RoutineSlot> {
   try {
-    if (!routineId || !slot || !slot.dayOfWeek || !slot.startTime || !slot.endTime) {
-      throw new Error('Missing required slot data');
+    console.log('Service: Adding routine slot', { routineId, slot });
+
+    if (!routineId) {
+      console.error('Missing routineId');
+      throw new Error('Missing routine ID');
+    }
+    
+    if (!slot) {
+      console.error('Missing slot data');
+      throw new Error('Missing slot data');
+    }
+    
+    if (!slot.dayOfWeek) {
+      console.error('Missing dayOfWeek');
+      throw new Error('Day of week is required');
+    }
+    
+    if (!slot.startTime) {
+      console.error('Missing startTime');
+      throw new Error('Start time is required');
+    }
+    
+    if (!slot.endTime) {
+      console.error('Missing endTime');
+      throw new Error('End time is required');
     }
 
     const { data, error } = await supabase
@@ -146,14 +169,15 @@ export async function addRoutineSlot(
 
     if (error) {
       console.error('Database error:', error);
-      throw new Error('Failed to add routine slot');
+      throw new Error(`Failed to add routine slot: ${error.message}`);
     }
 
     if (!data) {
+      console.error('No data returned from database');
       throw new Error('No data returned from database');
     }
 
-    return {
+    const result = {
       id: data.id,
       routineId: data.routine_id,
       courseId: data.course_id,
@@ -167,6 +191,10 @@ export async function addRoutineSlot(
       section: data.section,
       createdAt: data.created_at
     };
+    
+    console.log('Service: Successfully added routine slot', result);
+    
+    return result;
   } catch (error: any) {
     console.error('Error adding routine slot:', error);
     throw new Error(error.message || 'Failed to add routine slot');

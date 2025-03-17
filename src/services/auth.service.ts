@@ -180,8 +180,7 @@ export async function resetPassword(email: string): Promise<void> {
       throw new Error('Email is required');
     }
 
-    // Always use the correct production URL for password reset links
-    // Make sure this exactly matches your Vercel deployment URL
+    // Make sure this matches exactly with your actual Vercel deployment URL
     const productionUrl = 'https://nesttask-v66-routine.vercel.app/reset-password';
     console.log('Using production redirect URL for password reset:', productionUrl);
 
@@ -190,6 +189,8 @@ export async function resetPassword(email: string): Promise<void> {
     });
 
     if (error) throw error;
+    
+    console.log('Password reset email sent successfully');
   } catch (error: any) {
     console.error('Password reset error:', error);
     throw new Error(getAuthErrorMessage(error) || 'Failed to send password reset link. Please try again.');
@@ -203,53 +204,60 @@ export async function updatePassword(password: string, token?: string): Promise<
     }
 
     console.log('Starting password update process');
+    console.log('Current URL:', window.location.href);
     
-    // First check if we have an active session
-    const { data: sessionData } = await supabase.auth.getSession();
-    if (sessionData?.session) {
-      console.log('Found active session, using it for password update');
-      
-      // Update password with existing session
+    // Try the simplest direct approach first, which works in most cases
+    try {
+      console.log('Attempting direct password update');
       const { error } = await supabase.auth.updateUser({ password });
       
-      if (error) {
-        console.error('Error updating password with session:', error);
-        throw error;
+      if (!error) {
+        console.log('Password updated successfully!');
+        return;
+      } else {
+        console.error('Error with direct password update:', error);
+        // If direct update fails, we'll continue with other methods
       }
-      
-      console.log('Password updated successfully with existing session');
-      return;
+    } catch (directErr) {
+      console.error('Exception during direct password update:', directErr);
+      // Continue to try other methods
     }
     
-    console.log('No active session found, checking for reset code');
-    
-    // Check URL for code parameter (Supabase's preferred flow)
+    // If we got here, direct update failed - try to see if we have the code in the URL
     const searchParams = new URLSearchParams(window.location.search);
     const code = searchParams.get('code') || token;
     
-    if (code) {
-      console.log('Found code parameter:', code);
+    if (!code) {
+      console.error('No reset code found in URL or provided as parameter');
+      throw new Error('Invalid or expired password reset link. Please request a new one.');
+    }
+    
+    // Exchange the recovery code for a session
+    console.log('Exchanging recovery code for session');
+    try {
+      const { error: verifyError } = await supabase.auth.verifyOtp({
+        type: 'recovery',
+        token: code
+      });
       
-      try {
-        // For Supabase's latest auth flow, we use the password reset API directly with the code
-        const { error } = await supabase.auth.updateUser({
-          password: password
-        });
-        
-        if (error) {
-          console.error('Error updating password with code:', error);
-          throw error;
-        }
-        
-        console.log('Password updated successfully with code flow');
-        return;
-      } catch (err) {
-        console.error('Error in password reset flow:', err);
-        throw err;
+      if (verifyError) {
+        console.error('Error verifying recovery code:', verifyError);
+        throw verifyError;
       }
-    } else {
-      console.error('No reset code found');
-      throw new Error('No valid password reset token found. Please request a new password reset link.');
+      
+      // Now try again to update the password with the established session
+      const { error: updateError } = await supabase.auth.updateUser({ password });
+      
+      if (updateError) {
+        console.error('Error updating password after OTP verification:', updateError);
+        throw updateError;
+      }
+      
+      console.log('Password updated successfully!');
+      return;
+    } catch (err: any) {
+      console.error('Failed to complete password reset:', err);
+      throw new Error(err.message || 'Unable to reset password. Please try again or request a new reset link.');
     }
   } catch (error: any) {
     console.error('Update password error:', error);

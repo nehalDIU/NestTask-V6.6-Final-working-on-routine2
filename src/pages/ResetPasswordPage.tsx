@@ -46,19 +46,11 @@ export function ResetPasswordPage() {
     // Use the first available token format
     const token = codeFromQuery || tokenFromPath || tokenFromHash;
     
-    // If we have any valid token format, attempt to verify it
+    // If we have any valid token format, we consider it valid for now
+    // The actual verification will happen in updatePassword
     if (token) {
-      console.log('Token found, attempting to verify...');
-      try {
-        // We don't actually check the token here, just note that it exists
-        // The actual verification happens in updatePassword
-        setHasValidToken(true);
-        console.log('Token exists, enabling password reset form');
-      } catch (err) {
-        console.error('Token verification error:', err);
-        setError('Invalid or expired reset link. Please request a new password reset link.');
-        setHasValidToken(false);
-      }
+      console.log('Token found, proceeding with password reset form');
+      setHasValidToken(true);
     } else {
       console.log('No valid token found in URL');
       setError('No reset token found. Please request a password reset link from the login page.');

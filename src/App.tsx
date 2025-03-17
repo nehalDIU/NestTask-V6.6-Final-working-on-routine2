@@ -313,27 +313,7 @@ export default function App() {
   return (
     <Router>
       <Routes>
-        {/* Special handler for any URL with a code parameter (for password reset) */}
-        <Route 
-          path="*" 
-          element={
-            window.location.search.includes('code=') 
-              ? <ResetPasswordRedirectHandler /> 
-              : null
-          } 
-        />
-
-        {/* Root path handler that also checks for code parameter */}
-        <Route 
-          path="/" 
-          element={
-            window.location.search.includes('code=') 
-              ? <ResetPasswordRedirectHandler />
-              : (user ? <Navigate to="/home" replace /> : <Navigate to="/auth" replace />)
-          } 
-        />
-
-        {/* Reset password routes */}
+        {/* Reset password routes - must come before wildcard routes */}
         <Route 
           path="/reset-password" 
           element={<ManualResetPage />}
@@ -345,6 +325,16 @@ export default function App() {
         <Route 
           path="/auth/reset-password" 
           element={<ResetPasswordPage />}
+        />
+
+        {/* Special handler for root path with code parameter */}
+        <Route 
+          path="/" 
+          element={
+            window.location.search.includes('code=') 
+              ? <ResetPasswordRedirectHandler />
+              : (user ? <Navigate to="/home" replace /> : <Navigate to="/auth" replace />)
+          } 
         />
         
         {/* Regular routes */}
@@ -448,10 +438,14 @@ export default function App() {
           }
         />
 
-        {/* Wildcard route to handle any other path */}
-        <Route
-          path="*"
-          element={<Navigate to={user ? '/home' : '/auth'} replace />}
+        {/* Wildcard route to handle any other path with code parameter */}
+        <Route 
+          path="*" 
+          element={
+            window.location.search.includes('code=') 
+              ? <ResetPasswordRedirectHandler /> 
+              : <Navigate to={user ? '/home' : '/auth'} replace />
+          } 
         />
       </Routes>
     </Router>

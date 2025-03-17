@@ -180,16 +180,16 @@ export async function resetPassword(email: string): Promise<void> {
       throw new Error('Email is required');
     }
 
-    // Make sure this matches exactly with your ACTUAL Vercel deployment URL
-    // Check the URL in your browser when your app is running
-    let siteUrl = window.location.origin;
-    if (siteUrl.includes('localhost')) {
-      siteUrl = 'https://nesttask-v66-routine.vercel.app';
-    }
+    // Get current site URL
+    const siteUrl = window.location.origin;
     
+    // Define the reset URL - this is where Supabase will redirect after clicking the email link
     const resetUrl = `${siteUrl}/reset-password`;
+    
     console.log('Using redirect URL for password reset:', resetUrl);
+    console.log('Email for password reset:', email);
 
+    // Send the password reset email
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: resetUrl,
     });

@@ -11,14 +11,33 @@ export function ManualResetPage() {
   const [loading, setLoading] = useState(false);
   const [debugInfo, setDebugInfo] = useState<any>({});
   const [sessionVerified, setSessionVerified] = useState(false);
+  const [codeFound, setCodeFound] = useState<string | null>(null);
   
   const navigate = useNavigate();
   const location = useLocation();
+  
+  // Extract code from URL considering various formats
+  const extractCodeFromUrl = () => {
+    // First check query parameters
+    const searchParams = new URLSearchParams(window.location.search);
+    const searchCode = searchParams.get('code');
+    
+    // Then check hash fragments
+    const hashParams = new URLSearchParams(window.location.hash.substring(1));
+    const hashCode = hashParams.get('code');
+    
+    // Return the first found code
+    const code = searchCode || hashCode || null;
+    
+    console.log('Extracted code from URL:', code);
+    return code;
+  };
   
   // Function to manually exchange the code for a session
   const exchangeCodeForSession = async (code: string) => {
     try {
       console.log('Manually exchanging code for session');
+      console.log('Code length:', code.length);
       
       // Using Supabase's session handling for password recovery
       const { data, error } = await supabase.auth.exchangeCodeForSession(code);
@@ -43,24 +62,32 @@ export function ManualResetPage() {
     // Set page title and log debug info
     document.title = 'Reset Password - NestTask';
     
-    const currentUrl = window.location.href;
-    const searchParams = new URLSearchParams(location.search);
-    const code = searchParams.get('code');
+    // Logging for debugging
+    console.log('===== ManualResetPage Loaded =====');
+    console.log('Current URL:', window.location.href);
+    console.log('URL search:', window.location.search);
+    console.log('URL hash:', window.location.hash);
     
+    // Try to extract code from the URL
+    const code = extractCodeFromUrl();
+    setCodeFound(code);
+    
+    // Update debug info
     setDebugInfo({
-      url: currentUrl,
+      url: window.location.href,
+      search: window.location.search,
+      hash: window.location.hash,
       hasCode: !!code,
       code: code
     });
     
-    console.log('ManualResetPage loaded');
-    console.log('Current URL:', currentUrl);
-    console.log('Code parameter:', code);
-
     // If we have a code, automatically verify it on page load
     if (code) {
-      console.log('Attempting to exchange code for session');
+      console.log('Found code in URL, attempting to exchange for session');
       exchangeCodeForSession(code);
+    } else {
+      console.log('No code found in URL');
+      setError('No reset code found in URL. Please request a new password reset link.');
     }
   }, [location]);
   
@@ -81,9 +108,8 @@ export function ManualResetPage() {
     setError('');
     
     try {
-      // Get the code from URL if we need to re-verify
-      const searchParams = new URLSearchParams(location.search);
-      const code = searchParams.get('code');
+      // Get the code from URL
+      const code = codeFound;
       
       if (!code) {
         throw new Error('No reset code found in URL. Please request a new password reset link.');

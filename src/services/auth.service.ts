@@ -215,21 +215,44 @@ export async function updatePassword(password: string, token?: string): Promise<
     console.log('Starting password update process');
     console.log('Current URL:', window.location.href);
     
-    // Try the simplest direct approach first, which works in most cases
+    // If we have a token parameter, we need to verify it first
+    if (token) {
+      console.log('Token provided, attempting to verify and update password with token');
+      try {
+        // Exchange the token for a session
+        const { error: verifyError } = await supabase.auth.verifyOtp({
+          token_hash: token,
+          type: 'recovery',
+        });
+        
+        if (verifyError) {
+          console.error('Error verifying recovery token:', verifyError);
+          throw verifyError;
+        }
+        
+        console.log('Token verified successfully');
+      } catch (verifyErr) {
+        console.error('Error during token verification:', verifyErr);
+        throw new Error('Invalid or expired reset token. Please request a new password reset link.');
+      }
+    }
+    
+    // Now that we have a valid session (either existing or created by token verification),
+    // we can update the password
     try {
-      console.log('Attempting direct password update');
+      console.log('Attempting password update');
       const { error } = await supabase.auth.updateUser({ password });
       
       if (!error) {
         console.log('Password updated successfully!');
         return;
       } else {
-        console.error('Error with direct password update:', error);
+        console.error('Error with password update:', error);
         throw error;
       }
-    } catch (directErr) {
-      console.error('Exception during direct password update:', directErr);
-      throw directErr;
+    } catch (updateErr) {
+      console.error('Exception during password update:', updateErr);
+      throw updateErr;
     }
   } catch (error: any) {
     console.error('Update password error:', error);

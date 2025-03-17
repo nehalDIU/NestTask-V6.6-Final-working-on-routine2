@@ -204,6 +204,54 @@ export async function updatePassword(password: string, token?: string): Promise<
 
     console.log('Starting password update process');
     
+    // If token was explicitly passed to the function, use it first
+    if (token) {
+      console.log('Using explicitly provided token/code:', token);
+      
+      // Check if it's a Supabase code parameter format (UUID with dashes)
+      if (token.includes('-')) {
+        console.log('Token appears to be a Supabase code, using verifyOTP first');
+        
+        try {
+          // For code-based flow, we need to call verifyOTP first to exchange the code for a session
+          const { error: verifyError } = await supabase.auth.verifyOtp({
+            token_hash: token,
+            type: 'recovery'
+          });
+          
+          if (verifyError) {
+            console.error('Error verifying OTP code:', verifyError);
+            throw verifyError;
+          }
+          
+          console.log('OTP verified successfully, now updating password');
+          
+          // After verifying, we should have a session, so update the password
+          const { error } = await supabase.auth.updateUser({ password });
+          
+          if (error) {
+            console.error('Error updating password after OTP verification:', error);
+            throw error;
+          }
+          
+          console.log('Password updated successfully with OTP flow');
+          return;
+        } catch (err) {
+          console.error('Error in OTP verification flow:', err);
+          // If OTP verification fails, try the direct update as fallback
+          const { error } = await supabase.auth.updateUser({ password });
+          
+          if (error) {
+            console.error('Error in fallback password update:', error);
+            throw error;
+          } else {
+            console.log('Password updated successfully with fallback method');
+            return;
+          }
+        }
+      }
+    }
+    
     // First check if we have an active session
     const { data: sessionData } = await supabase.auth.getSession();
     if (sessionData?.session) {
@@ -223,61 +271,44 @@ export async function updatePassword(password: string, token?: string): Promise<
     
     console.log('No active session found, looking for reset tokens');
     
-    // If token was explicitly passed to the function, use it first
-    if (token) {
-      console.log('Using explicitly provided token/code:', token);
+    // Check URL search parameters for code parameter (Supabase's preferred flow)
+    const searchParams = new URLSearchParams(window.location.search);
+    const code = searchParams.get('code');
+    
+    if (code) {
+      console.log('Found code in search params - using Supabase recovery flow');
       
-      // Check if it's a Supabase code parameter
-      if (token.includes('-')) {
-        try {
-          console.log('Token appears to be a Supabase code, using updateUser directly');
-          // Try to use the code directly
-          const { error } = await supabase.auth.updateUser({ password });
-          
-          if (error) {
-            console.error('Error updating with provided code:', error);
-            throw error;
-          }
-          
-          console.log('Password updated successfully with provided code');
-          return;
-        } catch (err) {
-          console.error('Error using provided code:', err);
-          // Continue to try other methods
+      try {
+        // Call verifyOTP to exchange the code for a session
+        const { error: verifyError } = await supabase.auth.verifyOtp({
+          token_hash: code,
+          type: 'recovery'
+        });
+        
+        if (verifyError) {
+          console.error('Error verifying code:', verifyError);
+          throw verifyError;
         }
-      } else {
-        // It might be an access token
-        try {
-          console.log('Using provided token as access token');
-          // Try to set a session with the token
-          const { error: sessionError } = await supabase.auth.setSession({
-            access_token: token,
-            refresh_token: ''
-          });
-          
-          if (sessionError) {
-            console.error('Error setting session with provided token:', sessionError);
-            // Continue to try other methods
-          } else {
-            // Now try to update the password
-            const { error } = await supabase.auth.updateUser({ password });
-            
-            if (error) {
-              console.error('Error updating password after setting session with provided token:', error);
-              // Continue to try other methods
-            } else {
-              console.log('Password updated successfully with provided token');
-              return;
-            }
-          }
-        } catch (err) {
-          console.error('Error using provided token:', err);
-          // Continue to try other methods
+        
+        console.log('Code verified successfully, now updating password');
+        
+        // After verifying, we should have a session, so update the password
+        const { error } = await supabase.auth.updateUser({ password });
+        
+        if (error) {
+          console.error('Error updating password after code verification:', error);
+          throw error;
         }
+        
+        console.log('Password updated successfully with code flow');
+        return;
+      } catch (verifyErr) {
+        console.error('Error in code verification:', verifyErr);
+        // Continue to try other methods
       }
     }
     
-    // Try to extract token from various locations
+    // Try legacy token-based approach as fallback
     let accessToken = '';
     let tokenType = '';
     

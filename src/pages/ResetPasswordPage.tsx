@@ -84,7 +84,7 @@ export function ResetPasswordPage() {
       console.log('Using token for password reset:', token);
       
       if (!token) {
-        throw new Error('No reset token found');
+        throw new Error('No reset token found in URL. Please request a new password reset link.');
       }
       
       await updatePassword(password, token);
@@ -94,9 +94,20 @@ export function ResetPasswordPage() {
       setTimeout(() => {
         navigate('/auth');
       }, 3000);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Password reset error:', err);
-      setError(err instanceof Error ? err.message : 'Failed to reset password');
+      
+      // Handle specific error cases
+      if (err.message?.includes('invalid token') || err.message?.includes('Invalid token')) {
+        setError('Your password reset link has expired. Please request a new one.');
+      } else if (err.message?.includes('network')) {
+        setError('Network error. Please check your internet connection and try again.');
+      } else if (err.message?.includes('Rate')) {
+        setError('Too many attempts. Please wait a moment and try again.');
+      } else {
+        // Use the error message from the error object if available
+        setError(err instanceof Error ? err.message : 'Failed to reset password. Please try again or request a new reset link.');
+      }
     } finally {
       setLoading(false);
     }

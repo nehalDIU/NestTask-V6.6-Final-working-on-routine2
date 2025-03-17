@@ -30,6 +30,7 @@ import { isOverdue, isSameDay } from './utils/dateUtils';
 import { useOfflineStatus } from './hooks/useOfflineStatus';
 import type { NavPage } from './types/navigation';
 import type { TaskCategory } from './types';
+import { ManualResetPage } from './pages/ManualResetPage';
 
 type StatFilter = 'all' | 'overdue' | 'in-progress' | 'completed';
 
@@ -325,7 +326,7 @@ export default function App() {
         {/* Reset password routes */}
         <Route 
           path="/reset-password" 
-          element={<ResetPasswordPage />}
+          element={<ManualResetPage />}
         />
         <Route 
           path="/reset-password/:token" 

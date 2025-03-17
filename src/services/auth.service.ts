@@ -180,8 +180,8 @@ export async function resetPassword(email: string): Promise<void> {
       throw new Error('Email is required');
     }
 
-    // Always use the production URL for password reset links
-    // This ensures correct redirects regardless of where the app is running
+    // Always use the correct production URL for password reset links
+    // Make sure this exactly matches your Vercel deployment URL
     const productionUrl = 'https://nesttask-v66-routine.vercel.app/reset-password';
     console.log('Using production redirect URL for password reset:', productionUrl);
 
@@ -204,54 +204,6 @@ export async function updatePassword(password: string, token?: string): Promise<
 
     console.log('Starting password update process');
     
-    // If token was explicitly passed to the function, use it first
-    if (token) {
-      console.log('Using explicitly provided token/code:', token);
-      
-      // Check if it's a Supabase code parameter format (UUID with dashes)
-      if (token.includes('-')) {
-        console.log('Token appears to be a Supabase code, using verifyOTP first');
-        
-        try {
-          // For code-based flow, we need to call verifyOTP first to exchange the code for a session
-          const { error: verifyError } = await supabase.auth.verifyOtp({
-            token_hash: token,
-            type: 'recovery'
-          });
-          
-          if (verifyError) {
-            console.error('Error verifying OTP code:', verifyError);
-            throw verifyError;
-          }
-          
-          console.log('OTP verified successfully, now updating password');
-          
-          // After verifying, we should have a session, so update the password
-          const { error } = await supabase.auth.updateUser({ password });
-          
-          if (error) {
-            console.error('Error updating password after OTP verification:', error);
-            throw error;
-          }
-          
-          console.log('Password updated successfully with OTP flow');
-          return;
-        } catch (err) {
-          console.error('Error in OTP verification flow:', err);
-          // If OTP verification fails, try the direct update as fallback
-          const { error } = await supabase.auth.updateUser({ password });
-          
-          if (error) {
-            console.error('Error in fallback password update:', error);
-            throw error;
-          } else {
-            console.log('Password updated successfully with fallback method');
-            return;
-          }
-        }
-      }
-    }
-    
     // First check if we have an active session
     const { data: sessionData } = await supabase.auth.getSession();
     if (sessionData?.session) {
@@ -269,170 +221,35 @@ export async function updatePassword(password: string, token?: string): Promise<
       return;
     }
     
-    console.log('No active session found, looking for reset tokens');
+    console.log('No active session found, checking for reset code');
     
-    // Check URL search parameters for code parameter (Supabase's preferred flow)
+    // Check URL for code parameter (Supabase's preferred flow)
     const searchParams = new URLSearchParams(window.location.search);
-    const code = searchParams.get('code');
+    const code = searchParams.get('code') || token;
     
     if (code) {
-      console.log('Found code in search params - using Supabase recovery flow');
+      console.log('Found code parameter:', code);
       
       try {
-        // Call verifyOTP to exchange the code for a session
-        const { error: verifyError } = await supabase.auth.verifyOtp({
-          token_hash: code,
-          type: 'recovery'
+        // For Supabase's latest auth flow, we use the password reset API directly with the code
+        const { error } = await supabase.auth.updateUser({
+          password: password
         });
         
-        if (verifyError) {
-          console.error('Error verifying code:', verifyError);
-          throw verifyError;
-        }
-        
-        console.log('Code verified successfully, now updating password');
-        
-        // After verifying, we should have a session, so update the password
-        const { error } = await supabase.auth.updateUser({ password });
-        
         if (error) {
-          console.error('Error updating password after code verification:', error);
+          console.error('Error updating password with code:', error);
           throw error;
         }
         
         console.log('Password updated successfully with code flow');
         return;
-      } catch (verifyErr) {
-        console.error('Error in code verification:', verifyErr);
-        // Continue to try other methods
-      }
-    }
-    
-    // Try legacy token-based approach as fallback
-    let accessToken = '';
-    let tokenType = '';
-    
-    // Check URL hash
-    const hash = window.location.hash;
-    console.log('URL hash:', hash);
-    
-    if (hash) {
-      if (hash.includes('access_token=')) {
-        console.log('Found access_token in hash');
-        const hashParams = new URLSearchParams(hash.substring(1));
-        accessToken = hashParams.get('access_token') || '';
-        tokenType = 'access_token';
-      } else if (hash.includes('token=')) {
-        console.log('Found token= in hash');
-        const tokenStart = hash.indexOf('token=') + 6;
-        const tokenEnd = hash.indexOf('&', tokenStart);
-        accessToken = tokenEnd > tokenStart 
-          ? hash.substring(tokenStart, tokenEnd) 
-          : hash.substring(tokenStart);
-        tokenType = 'reset_token';
-      } else if (hash.length > 1) {
-        // Sometimes Supabase just puts the raw token in the hash
-        console.log('Using raw hash as token');
-        accessToken = hash.substring(1); // Remove the # symbol
-        tokenType = 'unknown';
-      }
-    }
-    
-    // Check URL search parameters
-    if (!accessToken) {
-      const searchParams = new URLSearchParams(window.location.search);
-      const type = searchParams.get('type');
-      const code = searchParams.get('code'); // For Supabase's native flow
-      
-      console.log('URL search params type:', type);
-      console.log('URL search params code:', code);
-      
-      if (type === 'recovery') {
-        console.log('Found recovery type in search params');
-        accessToken = searchParams.get('access_token') || '';
-        tokenType = 'recovery';
-      } else if (code) {
-        console.log('Found code in search params - using Supabase native flow');
-        // With the code parameter, we're likely in Supabase's native flow
-        // Just try to update the password directly
-        try {
-          const { error } = await supabase.auth.updateUser({ password });
-          
-          if (error) {
-            console.error('Error updating with code flow:', error);
-            throw error;
-          }
-          
-          console.log('Password updated successfully with code flow');
-          return;
-        } catch (err) {
-          console.error('Error in code-based password update:', err);
-          // Continue to try other methods
-        }
-      }
-    }
-    
-    // If we found any token, try to use it
-    if (accessToken) {
-      console.log(`Found ${tokenType} token, attempting to use it`);
-      
-      try {
-        // For 'recovery' type, we handle it differently
-        if (tokenType === 'recovery') {
-          // Sometimes the token is in the URL fragment
-          // Use the updateUser API directly
-          const { error } = await supabase.auth.updateUser({
-            password
-          });
-          
-          if (error) {
-            console.error('Error updating with recovery flow:', error);
-            throw error;
-          }
-        } else {
-          // Try to set a session with the token
-          const { error: sessionError } = await supabase.auth.setSession({
-            access_token: accessToken,
-            refresh_token: ''
-          });
-          
-          if (sessionError) {
-            console.error('Error setting session with token:', sessionError);
-            throw sessionError;
-          }
-          
-          // Now try to update the password
-          const { error } = await supabase.auth.updateUser({
-            password
-          });
-          
-          if (error) {
-            console.error('Error updating password after setting session:', error);
-            throw error;
-          }
-        }
-        
-        console.log('Password updated successfully');
-      } catch (error) {
-        console.error('Error in token-based password update flow:', error);
-        throw error;
+      } catch (err) {
+        console.error('Error in password reset flow:', err);
+        throw err;
       }
     } else {
-      // One last attempt - try updating directly without session/token
-      try {
-        console.log('Attempting direct password update as last resort');
-        const { error } = await supabase.auth.updateUser({ password });
-        
-        if (error) {
-          console.error('Error with direct password update:', error);
-          throw new Error('No valid password reset token found. Please request a new password reset link.');
-        }
-        
-        console.log('Password updated successfully with direct approach');
-      } catch (error) {
-        console.error('Final password update attempt failed:', error);
-        throw new Error('No valid password reset token found. Please request a new password reset link.');
-      }
+      console.error('No reset code found');
+      throw new Error('No valid password reset token found. Please request a new password reset link.');
     }
   } catch (error: any) {
     console.error('Update password error:', error);

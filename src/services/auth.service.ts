@@ -1,6 +1,5 @@
 import { supabase } from '../lib/supabase';
 import { getAuthErrorMessage } from '../utils/authErrors';
-import { getAuthRedirectUrl } from '../utils/environment';
 import type { LoginCredentials, SignupCredentials, User } from '../types/auth';
 
 export async function loginUser({ email, password }: LoginCredentials): Promise<User> {
@@ -179,103 +178,23 @@ export async function resetPassword(email: string): Promise<void> {
     if (!email) {
       throw new Error('Email is required');
     }
-
-    // Get current site URL
-    const siteUrl = window.location.origin;
     
-    // Define the reset URL with the correct format
-    // Supabase will append ?code=xxx to this URL when redirecting
-    const resetUrl = `${siteUrl}/reset-password`;
+    console.log('Sending password reset email to:', email);
     
-    console.log('Using redirect URL for password reset:', resetUrl);
-    console.log('Email for password reset:', email);
-
-    // Send the password reset email
+    // Use a specific hash fragment that will be detected in App.tsx
+    // The #auth/recovery path will be used to identify this is a recovery flow
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: resetUrl,
+      redirectTo: `${window.location.origin}/#auth/recovery`,
     });
-
+    
     if (error) {
-      console.error('Supabase reset password error:', error);
+      console.error('Supabase resetPasswordForEmail error:', error);
       throw error;
     }
     
     console.log('Password reset email sent successfully');
   } catch (error: any) {
     console.error('Password reset error:', error);
-    throw new Error(getAuthErrorMessage(error) || 'Failed to send password reset link. Please try again.');
-  }
-}
-
-export async function updatePassword(password: string, token?: string): Promise<void> {
-  try {
-    if (!password) {
-      throw new Error('Password is required');
-    }
-
-    console.log('Starting password update process');
-    
-    // If we have a token parameter, we need to verify it first
-    if (token) {
-      console.log('Token provided, attempting to exchange code for session');
-      try {
-        // Exchange the token for a session - this is how Supabase processes recovery tokens
-        const { data, error } = await supabase.auth.exchangeCodeForSession(token);
-        
-        if (error) {
-          console.error('Error exchanging code for session:', error);
-          
-          // For specific error messages, provide more user-friendly messages
-          if (error.message.includes('expired')) {
-            throw new Error('Your password reset link has expired. Please request a new one.');
-          } else if (error.message.includes('invalid')) {
-            throw new Error('Invalid reset link. Please request a new password reset link.');
-          }
-          
-          throw error;
-        }
-        
-        if (!data.session) {
-          console.error('No session returned after code exchange');
-          throw new Error('Unable to verify your reset link. Please request a new password reset link.');
-        }
-        
-        console.log('Code exchanged for session successfully');
-      } catch (verifyErr) {
-        console.error('Error during code exchange:', verifyErr);
-        
-        // Standardize error message for frontend handling
-        if (verifyErr instanceof Error) {
-          throw verifyErr; // Rethrow the error with our customized message
-        }
-        
-        throw new Error('Invalid or expired reset token. Please request a new password reset link.');
-      }
-    }
-    
-    // Now that we have a valid session, we can update the password
-    try {
-      console.log('Attempting to update user password');
-      const { error } = await supabase.auth.updateUser({ password });
-      
-      if (error) {
-        console.error('Error updating password:', error);
-        
-        // Handle specific error cases
-        if (error.message.includes('auth session')) {
-          throw new Error('Your session has expired. Please request a new password reset link and try again immediately.');
-        }
-        
-        throw error;
-      }
-      
-      console.log('Password updated successfully!');
-    } catch (updateErr) {
-      console.error('Exception during password update:', updateErr);
-      throw updateErr;
-    }
-  } catch (error: any) {
-    console.error('Update password error:', error);
-    throw new Error(getAuthErrorMessage(error) || 'Failed to update password. Please try again.');
+    throw new Error(getAuthErrorMessage(error) || 'Failed to send password reset email. Please try again.');
   }
 }

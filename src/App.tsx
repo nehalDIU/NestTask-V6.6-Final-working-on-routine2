@@ -323,6 +323,16 @@ export default function App() {
           } 
         />
 
+        {/* Root path handler that also checks for code parameter */}
+        <Route 
+          path="/" 
+          element={
+            window.location.search.includes('code=') 
+              ? <ResetPasswordRedirectHandler />
+              : (user ? <Navigate to="/home" replace /> : <Navigate to="/auth" replace />)
+          } 
+        />
+
         {/* Reset password routes */}
         <Route 
           path="/reset-password" 
@@ -338,12 +348,6 @@ export default function App() {
         />
         
         {/* Regular routes */}
-        <Route 
-          path="/" 
-          element={
-            user ? <Navigate to="/home" replace /> : <Navigate to="/auth" replace />
-          } 
-        />
         <Route 
           path="/auth" 
           element={

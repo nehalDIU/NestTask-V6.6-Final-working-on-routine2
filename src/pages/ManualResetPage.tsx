@@ -10,9 +10,34 @@ export function ManualResetPage() {
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
   const [debugInfo, setDebugInfo] = useState<any>({});
+  const [sessionVerified, setSessionVerified] = useState(false);
   
   const navigate = useNavigate();
   const location = useLocation();
+  
+  // Function to manually exchange the code for a session
+  const exchangeCodeForSession = async (code: string) => {
+    try {
+      console.log('Manually exchanging code for session');
+      
+      // Using Supabase's session handling for password recovery
+      const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+      
+      if (error) {
+        console.error('Error exchanging code for session:', error);
+        setError('Invalid or expired recovery link. Please request a new password reset link.');
+        return false;
+      }
+      
+      console.log('Session established successfully:', !!data.session);
+      setSessionVerified(true);
+      return true;
+    } catch (err) {
+      console.error('Error during code exchange:', err);
+      setError('Failed to verify your recovery code. Please request a new password reset link.');
+      return false;
+    }
+  };
   
   useEffect(() => {
     // Set page title and log debug info
@@ -31,6 +56,12 @@ export function ManualResetPage() {
     console.log('ManualResetPage loaded');
     console.log('Current URL:', currentUrl);
     console.log('Code parameter:', code);
+
+    // If we have a code, automatically verify it on page load
+    if (code) {
+      console.log('Attempting to exchange code for session');
+      exchangeCodeForSession(code);
+    }
   }, [location]);
   
   const handleSubmit = async (e: React.FormEvent) => {
@@ -50,7 +81,7 @@ export function ManualResetPage() {
     setError('');
     
     try {
-      // Get the code from URL
+      // Get the code from URL if we need to re-verify
       const searchParams = new URLSearchParams(location.search);
       const code = searchParams.get('code');
       
@@ -58,9 +89,17 @@ export function ManualResetPage() {
         throw new Error('No reset code found in URL. Please request a new password reset link.');
       }
       
-      console.log('Resetting password with code:', code);
+      // Ensure we have a valid session before continuing
+      if (!sessionVerified) {
+        const verified = await exchangeCodeForSession(code);
+        if (!verified) {
+          throw new Error('Could not verify the recovery code. Please request a new password reset link.');
+        }
+      }
       
-      // Use the simplest API call possible
+      console.log('Attempting to reset password');
+      
+      // With the session established, we can update the password
       const { error } = await supabase.auth.updateUser({ password });
       
       if (error) {
@@ -118,7 +157,7 @@ export function ManualResetPage() {
         {process.env.NODE_ENV === 'development' && (
           <div className="p-3 bg-gray-100 rounded-md text-xs font-mono">
             <p>Debug Info:</p>
-            <pre>{JSON.stringify(debugInfo, null, 2)}</pre>
+            <pre>{JSON.stringify({...debugInfo, sessionVerified}, null, 2)}</pre>
           </div>
         )}
         

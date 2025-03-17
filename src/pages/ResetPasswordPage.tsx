@@ -17,6 +17,11 @@ export function ResetPasswordPage() {
   const location = useLocation();
   const params = useParams();
   
+  // Set page title for SEO and clarity
+  useEffect(() => {
+    document.title = 'Reset Password - NestTask';
+  }, []);
+  
   useEffect(() => {
     console.log('ResetPasswordPage mounted');
     console.log('Current URL:', window.location.href);
@@ -40,6 +45,7 @@ export function ResetPasswordPage() {
     
     // If we have any valid token format, proceed
     if (codeFromQuery || tokenFromPath || tokenFromHash) {
+      console.log('Valid token/code found, enabling password reset form');
       setHasValidToken(true);
     } else {
       console.log('No valid token found in URL');
@@ -123,6 +129,9 @@ export function ResetPasswordPage() {
             <h1 className="text-2xl font-bold text-gray-900">Invalid Reset Link</h1>
             <p className="mt-2 text-gray-600">
               This password reset link is invalid or has expired.
+            </p>
+            <p className="mt-2 text-gray-500">
+              Please request a new password reset link from the login page.
             </p>
           </div>
           <div className="mt-6">

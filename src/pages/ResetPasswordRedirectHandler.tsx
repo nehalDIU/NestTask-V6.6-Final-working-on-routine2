@@ -6,8 +6,7 @@ export function ResetPasswordRedirectHandler() {
   const location = useLocation();
   
   useEffect(() => {
-    // Debug the current URL
-    console.log('Redirect handler activated');
+    console.log('Reset Password Redirect Handler Activated');
     console.log('Current URL:', window.location.href);
     console.log('Search params:', location.search);
     
@@ -16,12 +15,14 @@ export function ResetPasswordRedirectHandler() {
     const code = searchParams.get('code');
     
     if (code) {
-      console.log('Found reset code, redirecting to reset password page');
+      // We found a reset code, handle it
+      console.log('Found reset code in URL:', code);
       
-      // Redirect to our reset password page with the code preserved
+      // Redirect to the reset password page with the code
+      // This works regardless of whether we're on localhost or production
       navigate(`/reset-password?code=${code}`, { replace: true });
     } else {
-      console.log('No reset code found, redirecting to login');
+      console.log('No reset code found in URL, redirecting to login');
       navigate('/auth', { replace: true });
     }
   }, [location, navigate]);
@@ -30,7 +31,7 @@ export function ResetPasswordRedirectHandler() {
     <div className="min-h-screen flex items-center justify-center">
       <div className="text-center">
         <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-blue-500 mx-auto mb-4"></div>
-        <p className="text-gray-600">Redirecting to password reset...</p>
+        <p className="text-gray-600">Processing password reset link...</p>
       </div>
     </div>
   );

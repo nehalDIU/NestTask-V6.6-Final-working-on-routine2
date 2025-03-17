@@ -312,6 +312,16 @@ export default function App() {
   return (
     <Router>
       <Routes>
+        {/* Special handler for any URL with a code parameter (for password reset) */}
+        <Route 
+          path="*" 
+          element={
+            window.location.search.includes('code=') 
+              ? <ResetPasswordRedirectHandler /> 
+              : null
+          } 
+        />
+
         {/* Reset password routes */}
         <Route 
           path="/reset-password" 
@@ -326,20 +336,13 @@ export default function App() {
           element={<ResetPasswordPage />}
         />
         
-        {/* Password reset redirection */}
+        {/* Regular routes */}
         <Route 
           path="/" 
           element={
-            window.location.search.includes('code=') 
-              ? <ResetPasswordRedirectHandler /> 
-              : <Navigate to={user ? '/home' : '/auth'} replace />
+            user ? <Navigate to="/home" replace /> : <Navigate to="/auth" replace />
           } 
         />
-        <Route 
-          path="/callback" 
-          element={<ResetPasswordRedirectHandler />}
-        />
-        
         <Route 
           path="/auth" 
           element={

@@ -9,6 +9,7 @@ interface AuthInputProps {
   icon: LucideIcon;
   error?: string;
   required?: boolean;
+  onBlur?: () => void;
 }
 
 export function AuthInput({
@@ -19,7 +20,8 @@ export function AuthInput({
   placeholder,
   icon: Icon,
   error,
-  required = true
+  required = true,
+  onBlur
 }: AuthInputProps) {
   return (
     <div>
@@ -32,6 +34,7 @@ export function AuthInput({
           type={type}
           value={value}
           onChange={(e) => onChange(e.target.value)}
+          onBlur={onBlur}
           className={`
             w-full pl-10 pr-4 py-2.5 rounded-xl transition-colors
             ${error 

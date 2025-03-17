@@ -1,10 +1,13 @@
 import { useState, useEffect, useMemo } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './hooks/useAuth';
 import { useTasks } from './hooks/useTasks';
 import { useUsers } from './hooks/useUsers';
 import { useNotifications } from './hooks/useNotifications';
 import { useRoutines } from './hooks/useRoutines';
 import { AuthPage } from './pages/AuthPage';
+import { ResetPasswordPage } from './pages/ResetPasswordPage';
+import { ResetPasswordRedirectHandler } from './pages/ResetPasswordRedirectHandler';
 import { AdminDashboard } from './pages/AdminDashboard';
 import { Navigation } from './components/Navigation';
 import { TaskList } from './components/TaskList';
@@ -31,7 +34,7 @@ import type { TaskCategory } from './types';
 type StatFilter = 'all' | 'overdue' | 'in-progress' | 'completed';
 
 export default function App() {
-  const { user, loading: authLoading, error: authError, login, signup, logout } = useAuth();
+  const { user, loading: authLoading, error: authError, login, signup, logout, forgotPassword } = useAuth();
   const { users, loading: usersLoading } = useUsers();
   const { 
     tasks, 
@@ -111,34 +114,6 @@ export default function App() {
     }
   };
 
-  if (isLoading || authLoading || (user?.role === 'admin' && usersLoading)) {
-    return <LoadingScreen />;
-  }
-
-  if (!user) {
-    return (
-      <AuthPage
-        onLogin={login}
-        onSignup={signup}
-        error={authError}
-      />
-    );
-  }
-
-  if (user.role === 'admin') {
-    return (
-      <AdminDashboard
-        users={users}
-        tasks={tasks}
-        onLogout={logout}
-        onDeleteUser={() => {}}
-        onCreateTask={createTask}
-        onDeleteTask={deleteTask}
-        onUpdateTask={updateTask}
-      />
-    );
-  }
-
   // Filter tasks based on selected stat
   const getFilteredTasks = () => {
     let filtered = tasks;
@@ -169,7 +144,8 @@ export default function App() {
   };
 
   const categoryCounts = tasks.reduce((acc, task) => {
-    acc[task.category] = (acc[task.category] || 0) + 1;
+    const category = task.category as TaskCategory;
+    acc[category] = (acc[category] || 0) + 1;
     return acc;
   }, {} as Record<TaskCategory, number>);
 
@@ -215,7 +191,7 @@ export default function App() {
             {/* Welcome Section */}
             <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-2xl p-6 sm:p-8 text-white">
               <h1 className="text-2xl sm:text-3xl font-bold mb-2">
-                Welcome back, {user.name}!
+                Welcome back, {user?.name}!
               </h1>
               <p className="text-blue-100">
                 You have {taskStats.total} total tasks
@@ -328,67 +304,140 @@ export default function App() {
     }
   };
 
+  if (isLoading || authLoading || (user?.role === 'admin' && usersLoading)) {
+    return <LoadingScreen />;
+  }
+
+  // Main app rendering
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <Navigation 
-        onLogout={logout}
-        hasUnreadNotifications={hasUnreadNotifications}
-        onNotificationsClick={() => setShowNotifications(true)}
-        activePage={activePage}
-        onPageChange={setActivePage}
-        user={{
-          name: user.name,
-          email: user.email,
-          avatar: user.avatar
-        }}
-        taskStats={taskStats}
-        tasks={tasks}
-      />
-      
-      {showNotifications && (
-        <NotificationPanel
-          notifications={notifications}
-          onClose={() => setShowNotifications(false)}
-          onMarkAsRead={markAsRead}
-          onMarkAllAsRead={markAllAsRead}
-          onClear={clearNotification}
+    <Router>
+      <Routes>
+        {/* Reset password routes */}
+        <Route 
+          path="/reset-password" 
+          element={<ResetPasswordPage />}
         />
-      )}
-      
-      <main className="max-w-7xl mx-auto px-4 py-20 pb-24">
-        {isOffline && (
-          <div className="mb-4 bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-md">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <AlertCircle className="h-5 w-5 text-yellow-400" />
-              </div>
-              <div className="ml-3">
-                <p className="text-sm text-yellow-700">
-                  You are currently offline. Some features may be limited.
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
+        <Route 
+          path="/reset-password/:token" 
+          element={<ResetPasswordPage />}
+        />
+        <Route 
+          path="/auth/reset-password" 
+          element={<ResetPasswordPage />}
+        />
         
-        {tasksLoading ? (
-          <LoadingScreen />
-        ) : (
-          renderContent()
-        )}
-      </main>
+        {/* Handle all reset password redirects from email links */}
+        <Route 
+          path="/" 
+          element={
+            window.location.search.includes('code=') ? 
+              <ResetPasswordRedirectHandler /> : 
+              <Navigate to={user ? '/' : '/auth'} replace />
+          } 
+        />
+        <Route 
+          path="/callback" 
+          element={<ResetPasswordRedirectHandler />}
+        />
+        
+        <Route 
+          path="/auth" 
+          element={
+            !user ? (
+              <AuthPage
+                onLogin={login}
+                onSignup={signup}
+                onResetPassword={forgotPassword}
+                error={authError || ''}
+              />
+            ) : (
+              <Navigate to="/" replace />
+            )
+          } 
+        />
+        <Route
+          path="/*"
+          element={
+            user ? (
+              user.role === 'admin' ? (
+                <AdminDashboard
+                  users={users}
+                  tasks={tasks}
+                  onLogout={logout}
+                  onDeleteUser={() => {}}
+                  onCreateTask={createTask}
+                  onDeleteTask={deleteTask}
+                  onUpdateTask={updateTask}
+                />
+              ) : (
+                <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+                  <Navigation 
+                    onLogout={logout}
+                    hasUnreadNotifications={hasUnreadNotifications}
+                    onNotificationsClick={() => setShowNotifications(true)}
+                    activePage={activePage}
+                    onPageChange={setActivePage}
+                    user={{
+                      name: user.name,
+                      email: user.email,
+                      avatar: user.avatar || undefined
+                    }}
+                    taskStats={taskStats}
+                    tasks={tasks}
+                  />
+                  
+                  {showNotifications && (
+                    <NotificationPanel
+                      notifications={notifications}
+                      onClose={() => setShowNotifications(false)}
+                      onMarkAsRead={markAsRead}
+                      onMarkAllAsRead={markAllAsRead}
+                      onClear={clearNotification}
+                    />
+                  )}
+                  
+                  <main className="max-w-7xl mx-auto px-4 py-20 pb-24">
+                    {isOffline && (
+                      <div className="mb-4 bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-md">
+                        <div className="flex items-center">
+                          <div className="flex-shrink-0">
+                            <AlertCircle className="h-5 w-5 text-yellow-400" />
+                          </div>
+                          <div className="ml-3">
+                            <p className="text-sm text-yellow-700">
+                              You are currently offline. Some features may be limited.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {tasksLoading ? (
+                      <LoadingScreen />
+                    ) : (
+                      renderContent()
+                    )}
+                  </main>
 
-      <BottomNavigation 
-        activePage={activePage}
-        onPageChange={setActivePage}
-        hasUnreadNotifications={hasUnreadNotifications}
-        todayTaskCount={todayTaskCount}
-      />
+                  <BottomNavigation 
+                    activePage={activePage}
+                    onPageChange={setActivePage}
+                    hasUnreadNotifications={hasUnreadNotifications}
+                    todayTaskCount={todayTaskCount}
+                  />
 
-      <InstallPWA />
-      <OfflineIndicator />
-      <OfflineToast />
-      <OfflineSyncManager onSync={syncAllOfflineChanges} />
-    </div>
+                  <InstallPWA />
+                  <OfflineIndicator />
+                  <OfflineToast />
+                  <OfflineSyncManager onSync={syncAllOfflineChanges} />
+                </div>
+              )
+            ) : (
+              <Navigate to="/auth" replace />
+            )
+          }
+        />
+      </Routes>
+    </Router>
   );
 }

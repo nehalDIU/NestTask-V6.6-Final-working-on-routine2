@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { loginUser, signupUser, logoutUser } from '../services/auth.service';
+import { loginUser, signupUser, logoutUser, resetPassword, updatePassword } from '../services/auth.service';
 import type { User, LoginCredentials, SignupCredentials } from '../types/auth';
 
 export function useAuth() {
@@ -83,6 +83,35 @@ export function useAuth() {
       setUser(null);
     } catch (err: any) {
       setError(err.message);
+    }
+  };
+
+  const forgotPassword = async (email: string) => {
+    try {
+      setError(null);
+      await resetPassword(email);
+    } catch (err: any) {
+      setError(err.message);
+      throw err;
+    }
+  };
+
+  const changePassword = async (password: string) => {
+    try {
+      setError(null);
+      await updatePassword(password);
+    } catch (err: any) {
+      setError(err.message);
+      throw err;
+    }
+  };
+
+  const updatePasswordWithToken = async (password: string, token?: string) => {
+    try {
+      setError(null);
+      await updatePassword(password, token);
+    } catch (err: any) {
+      setError(err.message);
       throw err;
     }
   };
@@ -94,5 +123,8 @@ export function useAuth() {
     login,
     signup,
     logout,
+    forgotPassword,
+    changePassword,
+    updatePassword: updatePasswordWithToken
   };
 }

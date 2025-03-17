@@ -9,10 +9,11 @@ import type { LoginCredentials } from '../../types/auth';
 interface LoginFormProps {
   onSubmit: (credentials: LoginCredentials) => Promise<void>;
   onSwitchToSignup: () => void;
+  onForgotPassword: () => void;
   error?: string;
 }
 
-export function LoginForm({ onSubmit, onSwitchToSignup, error }: LoginFormProps) {
+export function LoginForm({ onSubmit, onSwitchToSignup, onForgotPassword, error }: LoginFormProps) {
   const [credentials, setCredentials] = useState<LoginCredentials>({
     email: '',
     password: '',
@@ -94,7 +95,11 @@ export function LoginForm({ onSubmit, onSwitchToSignup, error }: LoginFormProps)
             <input type="checkbox" className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
             <span className="ml-2 text-gray-600 dark:text-gray-400">Remember me</span>
           </label>
-          <button type="button" className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300">
+          <button 
+            type="button" 
+            onClick={onForgotPassword}
+            className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
+          >
             Forgot password?
           </button>
         </div>

@@ -182,7 +182,7 @@ export async function resetPassword(email: string): Promise<void> {
 
     // Always use the production URL for password reset links
     // This ensures correct redirects regardless of where the app is running
-    const productionUrl = 'https://nesttask.vercel.app/reset-password';
+    const productionUrl = 'https://nesttask-v66-routine.vercel.app/reset-password';
     console.log('Using production redirect URL for password reset:', productionUrl);
 
     const { error } = await supabase.auth.resetPasswordForEmail(email, {

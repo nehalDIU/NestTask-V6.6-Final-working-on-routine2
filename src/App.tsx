@@ -8,6 +8,7 @@ import { useRoutines } from './hooks/useRoutines';
 import { AuthPage } from './pages/AuthPage';
 import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import { ResetPasswordRedirectHandler } from './pages/ResetPasswordRedirectHandler';
+import { InvalidResetLink } from './pages/InvalidResetLink';
 import { AdminDashboard } from './pages/AdminDashboard';
 import { Navigation } from './components/Navigation';
 import { TaskList } from './components/TaskList';
@@ -325,6 +326,10 @@ export default function App() {
         <Route 
           path="/auth/reset-password" 
           element={<ResetPasswordPage />}
+        />
+        <Route 
+          path="/invalid-reset-link" 
+          element={<InvalidResetLink />}
         />
 
         {/* Special handler for root path with code parameter */}

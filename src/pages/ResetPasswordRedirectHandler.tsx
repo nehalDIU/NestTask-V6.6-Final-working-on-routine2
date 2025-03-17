@@ -26,17 +26,18 @@ export function ResetPasswordRedirectHandler() {
     setDebugInfo(`URL: ${window.location.href}, Code found: ${!!finalCode}, Code: ${finalCode}`);
     
     if (finalCode) {
-      console.log('Found reset code, redirecting to reset password page');
-      console.log('Code:', finalCode);
+      console.log('Found reset code:', finalCode);
+      console.log('Code length:', finalCode.length);
       
+      // Pass the entire code as-is without any modification
       // Use a small timeout to ensure the redirect happens after React rendering
       setTimeout(() => {
-        navigate(`/reset-password?code=${finalCode}`, { replace: true });
+        navigate(`/reset-password?code=${encodeURIComponent(finalCode)}`, { replace: true });
       }, 100);
     } else {
-      console.log('No reset code found, redirecting to login');
+      console.log('No reset code found, redirecting to invalid reset link page');
       setTimeout(() => {
-        navigate('/auth', { replace: true });
+        navigate('/invalid-reset-link', { replace: true });
       }, 100);
     }
   }, [location, navigate]);
@@ -45,7 +46,7 @@ export function ResetPasswordRedirectHandler() {
     <div className="min-h-screen flex items-center justify-center">
       <div className="text-center">
         <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-blue-500 mx-auto mb-4"></div>
-        <p className="text-gray-600">Redirecting to password reset...</p>
+        <p className="text-gray-600">Processing password reset...</p>
         <p className="text-xs text-gray-400 mt-2">
           If you are not redirected, <a href="/reset-password" className="text-blue-500">click here</a>.
         </p>

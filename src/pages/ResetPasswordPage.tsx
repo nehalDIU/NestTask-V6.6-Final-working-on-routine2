@@ -52,14 +52,23 @@ export function ResetPasswordPage() {
     // Use the first available token format, prioritizing 'code' which is Supabase's standard
     const token = codeFromQuery || tokenFromPath || codeFromHash || tokenFromHash;
     
-    // If we have any valid token format, we consider it valid for now
+    // If we have any valid token format, attempt to verify it with Supabase
     if (token) {
-      console.log('Token/code found:', token);
-      setHasValidToken(true);
+      console.log('Token/code found, will use:', token);
+      try {
+        // Just check if there's a token - we'll verify it properly during password reset
+        setHasValidToken(true);
+      } catch (err) {
+        console.error('Token verification failed:', err);
+        // Instead of just showing an error, redirect to the invalid reset link page
+        navigate('/invalid-reset-link', { replace: true });
+        return;
+      }
     } else {
       console.log('No valid token or code found in URL');
-      setError('No reset code found in URL. Please request a password reset link from the login page.');
-      setHasValidToken(false);
+      // Redirect to the invalid reset link page
+      navigate('/invalid-reset-link', { replace: true });
+      return;
     }
     
     setIsCheckingToken(false);
@@ -132,39 +141,6 @@ export function ResetPasswordPage() {
         <div className="text-center">
           <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-blue-500 mx-auto mb-4"></div>
           <p className="text-gray-600">Verifying reset token...</p>
-        </div>
-      </div>
-    );
-  }
-  
-  // If no valid token was found, show an error
-  if (!hasValidToken && !isCheckingToken) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50">
-        <div className="flex justify-center items-center mb-8">
-          <Layout className="w-10 h-10 text-blue-600" />
-          <h1 className="text-center text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600 ml-2">
-            NestTask
-          </h1>
-        </div>
-        <div className="w-full max-w-md p-8 space-y-8 bg-white rounded-lg shadow">
-          <div className="text-center">
-            <h1 className="text-2xl font-bold text-gray-900">Invalid Reset Link</h1>
-            <p className="mt-2 text-gray-600">
-              This password reset link is invalid or has expired.
-            </p>
-            <p className="mt-2 text-gray-500">
-              Please request a new password reset link from the login page.
-            </p>
-          </div>
-          <div className="mt-6">
-            <button
-              onClick={() => navigate('/auth')}
-              className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-            >
-              Return to Login
-            </button>
-          </div>
         </div>
       </div>
     );

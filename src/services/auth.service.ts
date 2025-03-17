@@ -220,16 +220,35 @@ export async function updatePassword(password: string, token?: string): Promise<
       console.log('Token provided, attempting to exchange code for session');
       try {
         // Exchange the token for a session - this is how Supabase processes recovery tokens
-        const { error } = await supabase.auth.exchangeCodeForSession(token);
+        const { data, error } = await supabase.auth.exchangeCodeForSession(token);
         
         if (error) {
           console.error('Error exchanging code for session:', error);
+          
+          // For specific error messages, provide more user-friendly messages
+          if (error.message.includes('expired')) {
+            throw new Error('Your password reset link has expired. Please request a new one.');
+          } else if (error.message.includes('invalid')) {
+            throw new Error('Invalid reset link. Please request a new password reset link.');
+          }
+          
           throw error;
+        }
+        
+        if (!data.session) {
+          console.error('No session returned after code exchange');
+          throw new Error('Unable to verify your reset link. Please request a new password reset link.');
         }
         
         console.log('Code exchanged for session successfully');
       } catch (verifyErr) {
         console.error('Error during code exchange:', verifyErr);
+        
+        // Standardize error message for frontend handling
+        if (verifyErr instanceof Error) {
+          throw verifyErr; // Rethrow the error with our customized message
+        }
+        
         throw new Error('Invalid or expired reset token. Please request a new password reset link.');
       }
     }
@@ -241,6 +260,12 @@ export async function updatePassword(password: string, token?: string): Promise<
       
       if (error) {
         console.error('Error updating password:', error);
+        
+        // Handle specific error cases
+        if (error.message.includes('auth session')) {
+          throw new Error('Your session has expired. Please request a new password reset link and try again immediately.');
+        }
+        
         throw error;
       }
       

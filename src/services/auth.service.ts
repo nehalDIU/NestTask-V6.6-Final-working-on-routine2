@@ -183,8 +183,8 @@ export async function resetPassword(email: string): Promise<void> {
     // Get current site URL
     const siteUrl = window.location.origin;
     
-    // Define the reset URL - this is where Supabase will redirect after clicking the email link
-    // Use a more standard path structure for the redirect
+    // Define the reset URL with the correct format
+    // Supabase will append ?code=xxx to this URL when redirecting
     const resetUrl = `${siteUrl}/reset-password`;
     
     console.log('Using redirect URL for password reset:', resetUrl);

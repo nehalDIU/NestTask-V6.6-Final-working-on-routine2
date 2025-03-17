@@ -32,28 +32,33 @@ export function ResetPasswordPage() {
   }, [location, params]);
   
   const checkForToken = async () => {
-    // Check for token in various formats
+    // Check for token in various formats - Supabase typically uses 'code' parameter
     const searchParams = new URLSearchParams(location.search);
     const codeFromQuery = searchParams.get('code');
     const tokenFromPath = params.token;
     const hashParams = new URLSearchParams(window.location.hash.substring(1));
     const tokenFromHash = hashParams.get('token');
+    const codeFromHash = hashParams.get('code');
     
+    // Log all token formats for debugging
     console.log('Code from query:', codeFromQuery);
     console.log('Token from path:', tokenFromPath);
     console.log('Token from hash:', tokenFromHash);
+    console.log('Code from hash:', codeFromHash);
+    console.log('Full URL:', window.location.href);
+    console.log('Search part:', window.location.search);
+    console.log('Hash part:', window.location.hash);
     
-    // Use the first available token format
-    const token = codeFromQuery || tokenFromPath || tokenFromHash;
+    // Use the first available token format, prioritizing 'code' which is Supabase's standard
+    const token = codeFromQuery || tokenFromPath || codeFromHash || tokenFromHash;
     
     // If we have any valid token format, we consider it valid for now
-    // The actual verification will happen in updatePassword
     if (token) {
-      console.log('Token found, proceeding with password reset form');
+      console.log('Token/code found:', token);
       setHasValidToken(true);
     } else {
-      console.log('No valid token found in URL');
-      setError('No reset token found. Please request a password reset link from the login page.');
+      console.log('No valid token or code found in URL');
+      setError('No reset code found in URL. Please request a password reset link from the login page.');
       setHasValidToken(false);
     }
     
@@ -77,20 +82,21 @@ export function ResetPasswordPage() {
     setError('');
     
     try {
-      // Get the token from URL in various formats
+      // Get the token from URL in various formats - same logic as in checkForToken
       const searchParams = new URLSearchParams(location.search);
-      const code = searchParams.get('code');
+      const codeFromQuery = searchParams.get('code');
       const tokenFromPath = params.token;
       const hashParams = new URLSearchParams(window.location.hash.substring(1));
       const tokenFromHash = hashParams.get('token');
+      const codeFromHash = hashParams.get('code');
       
-      // Use the first available token format
-      const token = code || tokenFromPath || tokenFromHash;
+      // Prioritize 'code' parameter as that's what Supabase uses
+      const token = codeFromQuery || tokenFromPath || codeFromHash || tokenFromHash;
       
-      console.log('Using token for password reset:', token);
+      console.log('Using code/token for password reset:', token);
       
       if (!token) {
-        throw new Error('No reset token found in URL. Please request a new password reset link.');
+        throw new Error('No reset code found in URL. Please request a new password reset link.');
       }
       
       await updatePassword(password, token);

@@ -30,6 +30,10 @@ export function ManualResetPage() {
     const code = searchCode || hashCode || null;
     
     console.log('Extracted code from URL:', code);
+    console.log('Full URL:', window.location.href);
+    console.log('URL search part:', window.location.search);
+    console.log('URL hash part:', window.location.hash);
+    
     return code;
   };
   

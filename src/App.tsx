@@ -316,7 +316,7 @@ export default function App() {
         {/* Reset password routes - must come before wildcard routes */}
         <Route 
           path="/reset-password" 
-          element={<ManualResetPage />}
+          element={<ResetPasswordPage />}
         />
         <Route 
           path="/reset-password/:token" 

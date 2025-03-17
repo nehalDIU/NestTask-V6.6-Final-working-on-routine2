@@ -9,7 +9,7 @@ export const PRODUCTION_URL = 'https://nesttask.vercel.app';
  * Checks if the app is running in a production environment
  */
 export function isProduction(): boolean {
-  if (typeof window === 'undefined') return false;
+  if (typeof window === 'undefined') return true; // Default to production for SSR
   
   const hostname = window.location.hostname;
   return hostname.includes('vercel.app') || 
@@ -21,11 +21,9 @@ export function isProduction(): boolean {
  * Gets the base URL for the current environment
  */
 export function getBaseUrl(): string {
-  if (typeof window === 'undefined') return PRODUCTION_URL;
-  
-  return isProduction() 
-    ? PRODUCTION_URL 
-    : window.location.origin;
+  // Force production URL for auth redirects even in development
+  // This ensures reset password links always point to production
+  return PRODUCTION_URL;
 }
 
 /**
@@ -34,5 +32,7 @@ export function getBaseUrl(): string {
 export function getAuthRedirectUrl(path: string): string {
   const baseUrl = getBaseUrl();
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  
+  console.log('Generated auth redirect URL:', `${baseUrl}${normalizedPath}`);
   return `${baseUrl}${normalizedPath}`;
 } 

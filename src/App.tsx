@@ -326,13 +326,13 @@ export default function App() {
           element={<ResetPasswordPage />}
         />
         
-        {/* Handle all reset password redirects from email links */}
+        {/* Password reset redirection */}
         <Route 
           path="/" 
           element={
-            window.location.search.includes('code=') ? 
-              <ResetPasswordRedirectHandler /> : 
-              <Navigate to={user ? '/' : '/auth'} replace />
+            window.location.search.includes('code=') 
+              ? <ResetPasswordRedirectHandler /> 
+              : <Navigate to={user ? '/home' : '/auth'} replace />
           } 
         />
         <Route 
@@ -355,8 +355,10 @@ export default function App() {
             )
           } 
         />
+
+        {/* Home route */}
         <Route
-          path="/*"
+          path="/home"
           element={
             user ? (
               user.role === 'admin' ? (
@@ -380,7 +382,7 @@ export default function App() {
                     user={{
                       name: user.name,
                       email: user.email,
-                      avatar: user.avatar || undefined
+                      avatar: undefined
                     }}
                     taskStats={taskStats}
                     tasks={tasks}
@@ -436,6 +438,12 @@ export default function App() {
               <Navigate to="/auth" replace />
             )
           }
+        />
+
+        {/* Wildcard route to handle any other path */}
+        <Route
+          path="*"
+          element={<Navigate to={user ? '/home' : '/auth'} replace />}
         />
       </Routes>
     </Router>

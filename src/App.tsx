@@ -145,13 +145,39 @@ export default function App() {
   const syncAllOfflineChanges = async () => {
     try {
       console.log('Syncing all offline changes...');
-      // Sync tasks
-      await syncOfflineChanges();
-      // Sync routines
-      await syncRoutineChanges();
-      console.log('All offline changes synced successfully');
+      
+      let tasksSuccess = true;
+      let routinesSuccess = true;
+      
+      // Sync tasks with error handling
+      try {
+        await syncOfflineChanges();
+        console.log('Tasks synced successfully');
+      } catch (err) {
+        console.error('Error syncing tasks:', err);
+        tasksSuccess = false;
+      }
+      
+      // Sync routines with error handling
+      try {
+        await syncRoutineChanges();
+        console.log('Routines synced successfully');
+      } catch (err) {
+        console.error('Error syncing routines:', err);
+        routinesSuccess = false;
+      }
+      
+      // Log overall sync status
+      if (tasksSuccess && routinesSuccess) {
+        console.log('All offline changes synced successfully');
+      } else {
+        console.warn('Some offline changes failed to sync');
+      }
+      
+      // Refresh data regardless of sync outcome to ensure UI is updated
+      refreshTasks();
     } catch (error) {
-      console.error('Error syncing offline changes:', error);
+      console.error('Error in sync process:', error);
     }
   };
 

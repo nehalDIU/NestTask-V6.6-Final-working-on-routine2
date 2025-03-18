@@ -65,29 +65,34 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [isResetPasswordFlow, setIsResetPasswordFlow] = useState(false);
 
+  // Check URL hash for password recovery path
+  const checkHashForRecovery = () => {
+    const hash = window.location.hash;
+    console.log('Current URL hash:', hash);
+    
+    // If the URL contains the recovery path, set the reset password flow
+    if (hash.includes('#auth/recovery')) {
+      console.log('Recovery path detected in URL - showing password reset UI');
+      setIsResetPasswordFlow(true);
+    }
+  };
+  
+  // Check hash on initial load and when it changes
   useEffect(() => {
     // Simulate initial loading
     const timer = setTimeout(() => {
       setIsLoading(false);
     }, 2000);
 
-    // Check URL hash for password recovery path
-    const checkHashForRecovery = () => {
-      const hash = window.location.hash;
-      console.log('Current URL hash:', hash);
-      
-      // If the URL contains the recovery path, set the reset password flow
-      if (hash.includes('#auth/recovery')) {
-        console.log('Recovery path detected in URL');
-        setIsResetPasswordFlow(true);
-      }
-    };
-    
     // Check hash on initial load
     checkHashForRecovery();
     
     // Also listen for hash changes
-    window.addEventListener('hashchange', checkHashForRecovery);
+    const handleHashChange = () => {
+      checkHashForRecovery();
+    };
+    
+    window.addEventListener('hashchange', handleHashChange);
 
     // Listen for auth state changes, including password recovery
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
@@ -106,7 +111,7 @@ export default function App() {
     return () => {
       clearTimeout(timer);
       subscription.unsubscribe();
-      window.removeEventListener('hashchange', checkHashForRecovery);
+      window.removeEventListener('hashchange', handleHashChange);
     };
   }, []);
 

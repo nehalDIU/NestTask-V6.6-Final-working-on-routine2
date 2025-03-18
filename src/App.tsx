@@ -167,7 +167,7 @@ export default function App() {
   if (!user) {
     return (
       <AuthPage
-        onLogin={login}
+        onLogin={(credentials, rememberMe = false) => login(credentials, rememberMe)}
         onSignup={signup}
         onForgotPassword={forgotPassword}
         error={authError || undefined}

@@ -2,11 +2,18 @@ import { supabase } from '../lib/supabase';
 import { getAuthErrorMessage } from '../utils/authErrors';
 import type { LoginCredentials, SignupCredentials, User } from '../types/auth';
 
+// Check if "Remember me" is enabled
+const isRememberMeEnabled = () => localStorage.getItem('nesttask_remember_me') === 'true';
+
 export async function loginUser({ email, password }: LoginCredentials): Promise<User> {
   try {
     if (!email || !password) {
       throw new Error('Email and password are required');
     }
+
+    // Check if "Remember me" is enabled from localStorage
+    const rememberMe = localStorage.getItem('nesttask_remember_me') === 'true';
+    console.log('Logging in with remember me:', rememberMe);
 
     const { data: authData, error: authError } = await supabase.auth.signInWithPassword({ 
       email, 

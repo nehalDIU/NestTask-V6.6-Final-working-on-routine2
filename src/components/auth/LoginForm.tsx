@@ -7,7 +7,7 @@ import { validateEmail, validatePassword } from '../../utils/authErrors';
 import type { LoginCredentials } from '../../types/auth';
 
 interface LoginFormProps {
-  onSubmit: (credentials: LoginCredentials) => Promise<void>;
+  onSubmit: (credentials: LoginCredentials, rememberMe: boolean) => Promise<void>;
   onSwitchToSignup: () => void;
   onForgotPassword: () => void;
   error?: string;
@@ -22,6 +22,7 @@ export function LoginForm({ onSubmit, onSwitchToSignup, onForgotPassword, error 
   const [localError, setLocalError] = useState<string | null>(null);
   const [touched, setTouched] = useState({ email: false, password: false });
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
 
   const validateForm = () => {
     if (!validateEmail(credentials.email)) {
@@ -43,7 +44,7 @@ export function LoginForm({ onSubmit, onSwitchToSignup, onForgotPassword, error 
 
     setIsLoading(true);
     try {
-      await onSubmit(credentials);
+      await onSubmit(credentials, rememberMe);
     } catch (err: any) {
       setLocalError(err.message);
     } finally {
@@ -108,6 +109,8 @@ export function LoginForm({ onSubmit, onSwitchToSignup, onForgotPassword, error 
           <label className="flex items-center cursor-pointer">
             <input 
               type="checkbox" 
+              checked={rememberMe}
+              onChange={(e) => setRememberMe(e.target.checked)}
               className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 cursor-pointer"
             />
             <span className="ml-2 text-gray-600 dark:text-gray-400">Remember me</span>

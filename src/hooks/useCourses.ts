@@ -8,11 +8,18 @@ import {
   fetchStudyMaterials,
   createStudyMaterial,
   updateStudyMaterial,
-  deleteStudyMaterial
+  deleteStudyMaterial,
+  bulkImportCourses
 } from '../services/course.service';
 import type { Course, NewCourse, StudyMaterial, NewStudyMaterial } from '../types/course';
 import { useOfflineStatus } from './useOfflineStatus';
-import { saveToIndexedDB, getAllFromIndexedDB, getByIdFromIndexedDB, STORES } from '../utils/offlineStorage';
+import { 
+  saveToIndexedDB, 
+  getAllFromIndexedDB, 
+  getByIdFromIndexedDB, 
+  clearIndexedDBStore,
+  STORES 
+} from '../utils/offlineStorage';
 
 // Define cache timestamp keys
 const COURSES_CACHE_TIMESTAMP_KEY = 'courses_last_fetched';
@@ -29,6 +36,8 @@ export function useCourses() {
     try {
       setLoading(true);
       
+      // No need to check for forced refresh as we always load fresh data
+      
       if (isOffline) {
         // When offline, get courses from IndexedDB
         console.log('Offline mode: Loading courses from IndexedDB');
@@ -41,39 +50,12 @@ export function useCourses() {
           setCourses([]);
         }
       } else {
-        // When online, check if we need to refresh cache
-        const lastFetched = localStorage.getItem(COURSES_CACHE_TIMESTAMP_KEY);
-        const cacheAge = lastFetched ? Date.now() - parseInt(lastFetched) : Infinity;
-        const cacheExpired = cacheAge > 1000 * 60 * 60; // 60 minutes cache lifetime
+        // Always fetch fresh data, no caching for admin dashboard
+        console.log('Admin dashboard: Always fetching fresh course data');
+        const data = await fetchCourses();
+        setCourses(data);
         
-        if (forceRefresh || cacheExpired) {
-          // Fetch from API and save to IndexedDB
-          const data = await fetchCourses();
-          setCourses(data);
-          
-          // Store courses in IndexedDB for offline use
-          if (data && data.length > 0) {
-            await saveToIndexedDB(STORES.COURSES, data);
-            // Update cache timestamp
-            localStorage.setItem(COURSES_CACHE_TIMESTAMP_KEY, Date.now().toString());
-            console.log('Saved courses to IndexedDB for offline use');
-          }
-        } else {
-          // Use cached data for better performance
-          console.log('Using cached courses - cache age:', Math.round(cacheAge / 1000), 'seconds');
-          const cachedCourses = await getAllFromIndexedDB(STORES.COURSES);
-          if (cachedCourses && cachedCourses.length > 0) {
-            setCourses(cachedCourses);
-          } else {
-            // If cache is empty, force a refresh
-            const data = await fetchCourses();
-            setCourses(data);
-            if (data && data.length > 0) {
-              await saveToIndexedDB(STORES.COURSES, data);
-              localStorage.setItem(COURSES_CACHE_TIMESTAMP_KEY, Date.now().toString());
-            }
-          }
-        }
+        // No longer saving to IndexedDB for admin dashboard
       }
     } catch (err: any) {
       console.error('Error loading courses:', err);
@@ -112,39 +94,12 @@ export function useCourses() {
           setMaterials([]);
         }
       } else {
-        // When online, check if we need to refresh cache
-        const lastFetched = localStorage.getItem(MATERIALS_CACHE_TIMESTAMP_KEY);
-        const cacheAge = lastFetched ? Date.now() - parseInt(lastFetched) : Infinity;
-        const cacheExpired = cacheAge > 1000 * 60 * 60; // 60 minutes cache lifetime
+        // Always fetch fresh data, no caching for admin dashboard
+        console.log('Admin dashboard: Always fetching fresh materials data');
+        const data = await fetchStudyMaterials();
+        setMaterials(data);
         
-        if (forceRefresh || cacheExpired) {
-          // Fetch from API and save to IndexedDB
-          const data = await fetchStudyMaterials();
-          setMaterials(data);
-          
-          // Store materials in IndexedDB for offline use
-          if (data && data.length > 0) {
-            await saveToIndexedDB(STORES.MATERIALS, data);
-            // Update cache timestamp
-            localStorage.setItem(MATERIALS_CACHE_TIMESTAMP_KEY, Date.now().toString());
-            console.log('Saved materials to IndexedDB for offline use');
-          }
-        } else {
-          // Use cached data for better performance
-          console.log('Using cached materials - cache age:', Math.round(cacheAge / 1000), 'seconds');
-          const cachedMaterials = await getAllFromIndexedDB(STORES.MATERIALS);
-          if (cachedMaterials && cachedMaterials.length > 0) {
-            setMaterials(cachedMaterials);
-          } else {
-            // If cache is empty, force a refresh
-            const data = await fetchStudyMaterials();
-            setMaterials(data);
-            if (data && data.length > 0) {
-              await saveToIndexedDB(STORES.MATERIALS, data);
-              localStorage.setItem(MATERIALS_CACHE_TIMESTAMP_KEY, Date.now().toString());
-            }
-          }
-        }
+        // No longer saving to IndexedDB for admin dashboard
       }
     } catch (err: any) {
       console.error('Error loading materials:', err);
@@ -203,6 +158,7 @@ export function useCourses() {
           ...course,
           id: tempId,
           createdAt: new Date().toISOString(),
+          createdBy: '',
           _isOffline: true // Mark as created offline
         };
         
@@ -296,19 +252,22 @@ export function useCourses() {
           }
         }
       } else {
-        // Online mode
-        await deleteCourse(id);
+        // ONLINE MODE - ENHANCED DELETION WORKFLOW
+        console.log(`Starting enhanced deletion for course ${id}`);
+        
+        // 1. First update UI immediately for better UX
         setCourses(prev => prev.filter(c => c.id !== id));
         
-        // Remove from IndexedDB
-        const allCourses = await getAllFromIndexedDB(STORES.COURSES);
-        const updatedCourses = allCourses.filter((c: Course) => c.id !== id);
-        await saveToIndexedDB(STORES.COURSES, updatedCourses);
+        // 2. Delete from remote database
+        await deleteCourse(id);
         
-        // Update cache timestamp
-        localStorage.setItem(COURSES_CACHE_TIMESTAMP_KEY, Date.now().toString());
+        // 3. No IndexedDB operations for admin dashboard, just load fresh data
+        await loadCourses(true);
+        
+        console.log(`Enhanced deletion for course ${id} completed`);
       }
     } catch (err: any) {
+      console.error(`Error deleting course ${id}:`, err);
       setError(err.message);
       throw err;
     }
@@ -344,6 +303,32 @@ export function useCourses() {
     }
   };
 
+  // Add the bulk import handler
+  const handleBulkImportCourses = async (courses: NewCourse[]): Promise<{ success: number; errors: any[] }> => {
+    try {
+      if (isOffline) {
+        return {
+          success: 0,
+          errors: [{ message: 'Bulk import is not available in offline mode' }]
+        };
+      }
+      
+      // Process the bulk import
+      const result = await bulkImportCourses(courses);
+      
+      // Refresh the courses list
+      await loadCourses(true);
+      
+      return result;
+    } catch (error: any) {
+      console.error('Error bulk importing courses:', error);
+      return {
+        success: 0,
+        errors: [{ message: error.message || 'Failed to import courses' }]
+      };
+    }
+  };
+
   return {
     courses,
     materials,
@@ -355,6 +340,7 @@ export function useCourses() {
     createMaterial: handleCreateMaterial,
     updateMaterial: handleUpdateMaterial,
     deleteMaterial: handleDeleteMaterial,
+    bulkImportCourses: handleBulkImportCourses,
     refreshCourses: () => loadCourses(true),
     refreshMaterials: () => loadMaterials(true),
     isOffline

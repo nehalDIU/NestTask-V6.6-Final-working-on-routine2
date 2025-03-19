@@ -17,8 +17,10 @@ import { useCourses } from '../hooks/useCourses';
 import { useRoutines } from '../hooks/useRoutines';
 import { useTeachers } from '../hooks/useTeachers';
 import { useUsers } from '../hooks/useUsers';
+import { showErrorToast } from '../utils/notifications';
 import type { User } from '../types/auth';
 import type { Task } from '../types/index';
+import type { Teacher, NewTeacher } from '../types/teacher';
 import type { AdminTab } from '../types/admin';
 
 interface AdminDashboardProps {
@@ -53,7 +55,8 @@ export function AdminDashboard({
     deleteCourse,
     createMaterial,
     updateMaterial,
-    deleteMaterial
+    deleteMaterial,
+    bulkImportCourses
   } = useCourses();
 
   const {
@@ -65,14 +68,16 @@ export function AdminDashboard({
     updateRoutineSlot,
     deleteRoutineSlot,
     activateRoutine,
-    deactivateRoutine
+    deactivateRoutine,
+    bulkImportSlots
   } = useRoutines();
 
   const {
     teachers,
     createTeacher,
     updateTeacher,
-    deleteTeacher
+    deleteTeacher: deleteTeacherService,
+    bulkImportTeachers
   } = useTeachers();
   
   const { deleteUser } = useUsers();
@@ -83,6 +88,29 @@ export function AdminDashboard({
       await deleteUser(userId);
     } catch (error) {
       console.error('Failed to delete user:', error);
+    }
+  };
+
+  // Enhanced deleteTeacher with better error handling and UI consistency
+  const deleteTeacher = async (teacherId: string) => {
+    if (!teacherId) {
+      console.error('Invalid teacher ID provided for deletion');
+      showErrorToast('Invalid teacher ID');
+      return Promise.resolve(); // Still resolve to keep UI consistent
+    }
+    
+    try {
+      console.log('Attempting to delete teacher:', teacherId);
+      await deleteTeacherService(teacherId);
+      console.log('Teacher deleted successfully:', teacherId);
+      return Promise.resolve();
+    } catch (error: any) {
+      // Log the error but still resolve the promise
+      console.error('Failed to delete teacher:', teacherId, error);
+      showErrorToast(`Error deleting teacher: ${error.message || 'Unknown error'}. The UI has been updated but you may need to refresh.`);
+      
+      // Return resolved promise anyway so UI stays consistent
+      return Promise.resolve();
     }
   };
 
@@ -163,9 +191,10 @@ export function AdminDashboard({
             <TeacherManager
               teachers={teachers}
               courses={courses}
-              onCreateTeacher={createTeacher}
-              onUpdateTeacher={updateTeacher}
+              onCreateTeacher={createTeacher as (teacher: NewTeacher, courseIds: string[]) => Promise<Teacher | undefined>}
+              onUpdateTeacher={updateTeacher as (id: string, updates: Partial<Teacher>, courseIds: string[]) => Promise<Teacher | undefined>}
               onDeleteTeacher={deleteTeacher}
+              onBulkImportTeachers={bulkImportTeachers}
             />
           )}
 
@@ -176,6 +205,7 @@ export function AdminDashboard({
               onCreateCourse={createCourse}
               onUpdateCourse={updateCourse}
               onDeleteCourse={deleteCourse}
+              onBulkImportCourses={bulkImportCourses}
             />
           )}
 
@@ -201,6 +231,7 @@ export function AdminDashboard({
               onDeleteSlot={deleteRoutineSlot}
               onActivateRoutine={activateRoutine}
               onDeactivateRoutine={deactivateRoutine}
+              onBulkImportSlots={bulkImportSlots}
             />
           )}
         </div>

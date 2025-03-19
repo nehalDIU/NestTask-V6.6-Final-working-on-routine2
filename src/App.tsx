@@ -1,22 +1,15 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback, lazy, Suspense } from 'react';
 import { useAuth } from './hooks/useAuth';
 import { useTasks } from './hooks/useTasks';
 import { useUsers } from './hooks/useUsers';
 import { useNotifications } from './hooks/useNotifications';
 import { useRoutines } from './hooks/useRoutines';
 import { AuthPage } from './pages/AuthPage';
-import { AdminDashboard } from './pages/AdminDashboard';
+import { LoadingScreen } from './components/LoadingScreen';
 import { Navigation } from './components/Navigation';
 import { TaskList } from './components/TaskList';
 import { BottomNavigation } from './components/BottomNavigation';
-import { UpcomingPage } from './pages/UpcomingPage';
-import { SearchPage } from './pages/SearchPage';
-import { NotificationsPage } from './pages/NotificationsPage';
-import { CoursePage } from './pages/CoursePage';
-import { StudyMaterialsPage } from './pages/StudyMaterialsPage';
-import { RoutinePage } from './pages/RoutinePage'; // Import RoutinePage
 import { NotificationPanel } from './components/notifications/NotificationPanel';
-import { LoadingScreen } from './components/LoadingScreen';
 import { InstallPWA } from './components/InstallPWA';
 import { OfflineIndicator } from './components/ui/OfflineIndicator';
 import { OfflineToast } from './components/ui/OfflineToast';
@@ -25,14 +18,40 @@ import { ListTodo, CheckCircle2, Clock, AlertCircle } from 'lucide-react';
 import { TaskCategories } from './components/task/TaskCategories';
 import { isOverdue, isSameDay } from './utils/dateUtils';
 import { useOfflineStatus } from './hooks/useOfflineStatus';
+import { usePredictivePreload } from './hooks/usePredictivePreload';
+import { InstantTransition } from './components/InstantTransition';
+import { prefetchResources } from './utils/prefetch';
+import { STORES } from './utils/offlineStorage';
 import type { NavPage } from './types/navigation';
-import type { TaskCategory } from './types';
+import type { TaskCategory } from './types/task';
+import type { Task } from './types/task';
+import type { User } from './types/user';
 import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import { supabase } from './lib/supabase';
+import { preloadPredictedRoutes } from './utils/routePreloader';
+
+// Page import functions for prefetching
+const importAdminDashboard = () => import('./pages/AdminDashboard').then(module => ({ default: module.AdminDashboard }));
+const importUpcomingPage = () => import('./pages/UpcomingPage').then(module => ({ default: module.UpcomingPage }));
+const importSearchPage = () => import('./pages/SearchPage').then(module => ({ default: module.SearchPage }));
+const importNotificationsPage = () => import('./pages/NotificationsPage').then(module => ({ default: module.NotificationsPage }));
+const importCoursePage = () => import('./pages/CoursePage').then(module => ({ default: module.CoursePage }));
+const importStudyMaterialsPage = () => import('./pages/StudyMaterialsPage').then(module => ({ default: module.StudyMaterialsPage }));
+const importRoutinePage = () => import('./pages/RoutinePage').then(module => ({ default: module.RoutinePage }));
+
+// Lazy-loaded components with instant loading config
+const AdminDashboard = lazy(importAdminDashboard);
+const UpcomingPage = lazy(importUpcomingPage);
+const SearchPage = lazy(importSearchPage);
+const NotificationsPage = lazy(importNotificationsPage);
+const CoursePage = lazy(importCoursePage);
+const StudyMaterialsPage = lazy(importStudyMaterialsPage);
+const RoutinePage = lazy(importRoutinePage);
 
 type StatFilter = 'all' | 'overdue' | 'in-progress' | 'completed';
 
 export default function App() {
+  // Always call all hooks first, regardless of any conditions
   const { user, loading: authLoading, error: authError, login, signup, logout, forgotPassword } = useAuth();
   const { users, loading: usersLoading } = useUsers();
   const { 
@@ -65,59 +84,20 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [isResetPasswordFlow, setIsResetPasswordFlow] = useState(false);
 
-  // Check URL hash for password recovery path
-  const checkHashForRecovery = () => {
-    const hash = window.location.hash;
-    console.log('Current URL hash:', hash);
-    
-    // If the URL contains the recovery path, set the reset password flow
-    if (hash.includes('#auth/recovery')) {
-      console.log('Recovery path detected in URL - showing password reset UI');
-      setIsResetPasswordFlow(true);
-    }
-  };
-  
-  // Check hash on initial load and when it changes
+  // Use predictive preloading based on navigation patterns
+  const { predictedPages, recordAction } = usePredictivePreload(activePage, {
+    enabled: true,
+    threshold: 2
+  });
+
+  // Preload resources for predicted pages
   useEffect(() => {
-    // Simulate initial loading
-    const timer = setTimeout(() => {
-      setIsLoading(false);
-    }, 2000);
+    if (predictedPages.length > 0) {
+      preloadPredictedRoutes(predictedPages);
+    }
+  }, [predictedPages]);
 
-    // Check hash on initial load
-    checkHashForRecovery();
-    
-    // Also listen for hash changes
-    const handleHashChange = () => {
-      checkHashForRecovery();
-    };
-    
-    window.addEventListener('hashchange', handleHashChange);
-
-    // Listen for auth state changes, including password recovery
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      console.log('Auth state change event:', event);
-      
-      if (event === 'PASSWORD_RECOVERY') {
-        console.log('Password recovery flow detected via auth state');
-        setIsResetPasswordFlow(true);
-      }
-      
-      if (event === 'SIGNED_IN') {
-        console.log('User signed in:', session?.user?.email);
-      }
-    });
-    
-    return () => {
-      clearTimeout(timer);
-      subscription.unsubscribe();
-      window.removeEventListener('hashchange', handleHashChange);
-    };
-  }, []);
-
-  const hasUnreadNotifications = unreadCount > 0;
-
-  // Calculate today's task count
+  // Calculate today's task count - always compute this value regardless of rendering path
   const todayTaskCount = useMemo(() => {
     if (!tasks || tasks.length === 0) return 0;
     
@@ -141,37 +121,87 @@ export default function App() {
     }).length;
   }, [tasks]);
 
+  // Compute task stats - moved here from inside render to ensure consistent hook order
+  const taskStats = useMemo(() => ({
+    total: tasks.length,
+    inProgress: tasks.filter(t => t.status === 'in-progress').length,
+    completed: tasks.filter(t => t.status === 'completed').length,
+    overdue: tasks.filter(t => isOverdue(t.dueDate) && t.status !== 'completed').length
+  }), [tasks]);
+
+  // Compute category counts - moved here from inside render to ensure consistent hook order
+  const categoryCounts = useMemo(() => {
+    return tasks.reduce((acc: Record<string, number>, task) => {
+      if (!acc[task.category]) {
+        acc[task.category] = 0;
+      }
+      acc[task.category] = (acc[task.category] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+  }, [tasks]);
+
+  // Check for unread notifications - moved here from inside render
+  const hasUnreadNotifications = useMemo(() => unreadCount > 0, [unreadCount]);
+
+  // Check URL hash for password recovery path
+  const checkHashForRecovery = useCallback(() => {
+    const hash = window.location.hash;
+    
+    // If the URL contains the recovery path, set the reset password flow
+    if (hash.includes('#auth/recovery')) {
+      setIsResetPasswordFlow(true);
+    }
+  }, []);
+  
+  // Check hash on initial load and when it changes
+  useEffect(() => {
+    // Reduce artificial loading delay to improve perceived performance
+    const timer = setTimeout(() => {
+      setIsLoading(false);
+    }, 800); // Reduced from 2000ms to 800ms
+
+    // Check hash on initial load
+    checkHashForRecovery();
+    
+    // Also listen for hash changes
+    const handleHashChange = () => {
+      checkHashForRecovery();
+    };
+    
+    window.addEventListener('hashchange', handleHashChange);
+
+    // Listen for auth state changes, including password recovery
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setIsResetPasswordFlow(true);
+      }
+    });
+    
+    return () => {
+      clearTimeout(timer);
+      subscription.unsubscribe();
+      window.removeEventListener('hashchange', handleHashChange);
+    };
+  }, [checkHashForRecovery]);
+
   // Handle syncing all offline changes when coming back online
   const syncAllOfflineChanges = async () => {
     try {
-      console.log('Syncing all offline changes...');
-      
       let tasksSuccess = true;
       let routinesSuccess = true;
       
       // Sync tasks with error handling
       try {
         await syncOfflineChanges();
-        console.log('Tasks synced successfully');
       } catch (err) {
-        console.error('Error syncing tasks:', err);
         tasksSuccess = false;
       }
       
       // Sync routines with error handling
       try {
         await syncRoutineChanges();
-        console.log('Routines synced successfully');
       } catch (err) {
-        console.error('Error syncing routines:', err);
         routinesSuccess = false;
-      }
-      
-      // Log overall sync status
-      if (tasksSuccess && routinesSuccess) {
-        console.log('All offline changes synced successfully');
-      } else {
-        console.warn('Some offline changes failed to sync');
       }
       
       // Refresh data regardless of sync outcome to ensure UI is updated
@@ -180,40 +210,6 @@ export default function App() {
       console.error('Error in sync process:', error);
     }
   };
-
-  if (isLoading || authLoading || (user?.role === 'admin' && usersLoading)) {
-    return <LoadingScreen />;
-  }
-
-  // Handle password reset flow
-  if (isResetPasswordFlow) {
-    return <ResetPasswordPage />;
-  }
-
-  if (!user) {
-    return (
-      <AuthPage
-        onLogin={(credentials, rememberMe = false) => login(credentials, rememberMe)}
-        onSignup={signup}
-        onForgotPassword={forgotPassword}
-        error={authError || undefined}
-      />
-    );
-  }
-
-  if (user.role === 'admin') {
-    return (
-      <AdminDashboard
-        users={users}
-        tasks={tasks}
-        onLogout={logout}
-        onDeleteUser={() => {}}
-        onCreateTask={createTask}
-        onDeleteTask={deleteTask}
-        onUpdateTask={updateTask}
-      />
-    );
-  }
 
   // Filter tasks based on selected stat
   const getFilteredTasks = () => {
@@ -237,18 +233,6 @@ export default function App() {
     }
   };
 
-  const taskStats = {
-    total: tasks.length,
-    inProgress: tasks.filter(t => t.status === 'in-progress').length,
-    completed: tasks.filter(t => t.status === 'completed').length,
-    overdue: tasks.filter(t => isOverdue(t.dueDate) && t.status !== 'completed').length
-  };
-
-  const categoryCounts = tasks.reduce((acc, task) => {
-    acc[task.category] = (acc[task.category] || 0) + 1;
-    return acc;
-  }, {} as Record<TaskCategory, number>);
-
   const getStatTitle = () => {
     switch (statFilter) {
       case 'overdue':
@@ -267,31 +251,53 @@ export default function App() {
   const renderContent = () => {
     switch (activePage) {
       case 'upcoming':
-        return <UpcomingPage tasks={tasks} />;
+        return (
+          <Suspense fallback={<LoadingScreen minimumLoadTime={300} />}>
+            <UpcomingPage tasks={tasks} />
+          </Suspense>
+        );
       case 'search':
-        return <SearchPage tasks={tasks} />;
+        return (
+          <Suspense fallback={<LoadingScreen minimumLoadTime={300} />}>
+            <SearchPage tasks={tasks} />
+          </Suspense>
+        );
       case 'notifications':
         return (
-          <NotificationsPage
-            notifications={notifications}
-            onMarkAsRead={markAsRead}
-            onMarkAllAsRead={markAllAsRead}
-            onClear={clearNotification}
-          />
+          <Suspense fallback={<LoadingScreen minimumLoadTime={300} />}>
+            <NotificationsPage
+              notifications={notifications}
+              onMarkAsRead={markAsRead}
+              onMarkAllAsRead={markAllAsRead}
+              onClear={clearNotification}
+            />
+          </Suspense>
         );
       case 'courses':
-        return <CoursePage />;
+        return (
+          <Suspense fallback={<LoadingScreen minimumLoadTime={300} />}>
+            <CoursePage />
+          </Suspense>
+        );
       case 'study-materials':
-        return <StudyMaterialsPage />;
+        return (
+          <Suspense fallback={<LoadingScreen minimumLoadTime={300} />}>
+            <StudyMaterialsPage />
+          </Suspense>
+        );
       case 'routine':
-        return <RoutinePage />;
+        return (
+          <Suspense fallback={<LoadingScreen minimumLoadTime={300} />}>
+            <RoutinePage />
+          </Suspense>
+        );
       default:
         return (
           <div className="space-y-8">
             {/* Welcome Section */}
             <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-2xl p-6 sm:p-8 text-white">
               <h1 className="text-2xl sm:text-3xl font-bold mb-2">
-                Welcome back, {user.name}!
+                Welcome back, {user?.name || 'User'}!
               </h1>
               <p className="text-blue-100">
                 You have {taskStats.total} total tasks
@@ -404,6 +410,43 @@ export default function App() {
     }
   };
 
+  // Early returns based on loading state and authentication
+  if (isLoading || authLoading || (user?.role === 'admin' && usersLoading)) {
+    return <LoadingScreen minimumLoadTime={300} />;
+  }
+
+  // Handle password reset flow
+  if (isResetPasswordFlow) {
+    return <ResetPasswordPage />;
+  }
+
+  if (!user) {
+    return (
+      <AuthPage
+        onLogin={(credentials, rememberMe = false) => login(credentials, rememberMe)}
+        onSignup={signup}
+        onForgotPassword={forgotPassword}
+        error={authError || undefined}
+      />
+    );
+  }
+
+  if (user.role === 'admin') {
+    return (
+      <Suspense fallback={<LoadingScreen minimumLoadTime={300} />}>
+        <AdminDashboard
+          users={users}
+          tasks={tasks}
+          onLogout={logout}
+          onDeleteUser={() => {}}
+          onCreateTask={createTask}
+          onDeleteTask={deleteTask}
+          onUpdateTask={updateTask}
+        />
+      </Suspense>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <Navigation 
@@ -415,7 +458,7 @@ export default function App() {
         user={{
           name: user.name,
           email: user.email,
-          avatar: user.avatar
+          avatar: user.avatar || '' // Provide a default value
         }}
         taskStats={taskStats}
         tasks={tasks}
@@ -448,7 +491,7 @@ export default function App() {
         )}
         
         {tasksLoading ? (
-          <LoadingScreen />
+          <LoadingScreen minimumLoadTime={300} />
         ) : (
           renderContent()
         )}

@@ -1,5 +1,7 @@
 import { supabase } from '../lib/supabase';
 import type { Course, NewCourse, StudyMaterial, NewStudyMaterial } from '../types/course';
+import { checkTeacherNameExists } from './teacher.service';
+import { NewTeacher } from '../types/teacher';
 
 // Course functions
 export async function fetchCourses(): Promise<Course[]> {
@@ -41,7 +43,9 @@ export async function createCourse(course: NewCourse): Promise<Course> {
         class_time: formattedClassTimes,
         telegram_group: course.telegramGroup,
         blc_link: course.blcLink,
-        blc_enroll_key: course.blcEnrollKey
+        blc_enroll_key: course.blcEnrollKey,
+        credit: course.credit,
+        section: course.section
       })
       .select()
       .single();
@@ -72,7 +76,9 @@ export async function updateCourse(id: string, updates: Partial<Course>): Promis
         class_time: formattedClassTimes,
         telegram_group: updates.telegramGroup,
         blc_link: updates.blcLink,
-        blc_enroll_key: updates.blcEnrollKey
+        blc_enroll_key: updates.blcEnrollKey,
+        credit: updates.credit,
+        section: updates.section
       })
       .eq('id', id)
       .select()
@@ -88,12 +94,19 @@ export async function updateCourse(id: string, updates: Partial<Course>): Promis
 
 export async function deleteCourse(id: string): Promise<void> {
   try {
+    console.log(`Attempting to delete course with ID: ${id}`);
+    
     const { error } = await supabase
       .from('courses')
       .delete()
       .eq('id', id);
 
-    if (error) throw error;
+    if (error) {
+      console.error('Error during course deletion:', error);
+      throw error;
+    }
+    
+    console.log(`Successfully deleted course: ${id}`);
   } catch (error) {
     console.error('Error deleting course:', error);
     throw error;
@@ -289,7 +302,169 @@ function mapCourseFromDB(data: any): Course {
     telegramGroup: data.telegram_group,
     blcLink: data.blc_link,
     blcEnrollKey: data.blc_enroll_key,
+    credit: data.credit,
+    section: data.section,
     createdAt: data.created_at,
     createdBy: data.created_by
+  };
+}
+
+/**
+ * Bulk import courses from JSON data
+ * @param courses The array of courses to import
+ * @returns An object with success count and errors array
+ */
+export async function bulkImportCourses(courses: NewCourse[]): Promise<{ success: number; errors: any[] }> {
+  const errors: any[] = [];
+  let successCount = 0;
+  
+  for (let i = 0; i < courses.length; i++) {
+    const course = courses[i];
+    try {
+      // Format class times into a string (which should be empty as we're not importing class times)
+      const formattedClassTimes = course.classTimes
+        .map(ct => `${ct.day} at ${ct.time}${ct.classroom ? ` in ${ct.classroom}` : ''}`)
+        .join(', ');
+      
+      // Check if a course with this code already exists
+      const { data: existingCourse, error: checkError } = await supabase
+        .from('courses')
+        .select('id, code')
+        .eq('code', course.code)
+        .maybeSingle();
+      
+      if (checkError) {
+        throw new Error(`Error checking for existing course: ${checkError.message}`);
+      }
+      
+      if (existingCourse) {
+        errors.push({
+          message: `Course #${i + 1} (${course.code}): A course with this code already exists`
+        });
+        continue;
+      }
+      
+      // Check if the teacher exists - if not, create a new teacher
+      let teacherId: string | undefined = course.teacherId;
+      
+      if (!teacherId && course.teacher) {
+        // If no teacher ID was provided but a teacher name was, check if the teacher exists
+        const teacherExists = await checkTeacherNameExists(course.teacher);
+        
+        if (!teacherExists) {
+          // Teacher doesn't exist, create a new teacher record
+          console.log(`Creating new teacher "${course.teacher}" for course #${i + 1} (${course.code})`);
+          
+          try {
+            // Create the teacher with minimal information
+            const { data: newTeacher, error: teacherError } = await supabase
+              .from('teachers')
+              .insert({
+                name: course.teacher,
+                phone: 'N/A', // Required field, using placeholder
+                department: course.teacher.includes('(') ? course.teacher.split('(')[1].replace(')', '') : undefined
+              })
+              .select()
+              .single();
+              
+            if (teacherError) {
+              // If there's an error creating the teacher, log it but continue with course creation
+              console.error(`Error creating teacher: ${teacherError.message}`);
+              errors.push({
+                message: `Course #${i + 1} (${course.code}): Warning - Could not create teacher "${course.teacher}": ${teacherError.message}`,
+                isWarning: true
+              });
+            } else {
+              // Use the new teacher's ID
+              teacherId = newTeacher.id;
+              console.log(`Created new teacher with ID ${teacherId}`);
+              errors.push({
+                message: `Created teacher "${course.teacher}" for course "${course.code}"`,
+                isWarning: true,
+                isSuccess: true
+              });
+            }
+          } catch (teacherCreateError: any) {
+            console.error(`Error creating teacher:`, teacherCreateError);
+            errors.push({
+              message: `Course #${i + 1} (${course.code}): Warning - Failed to create teacher: ${teacherCreateError.message}`,
+              isWarning: true
+            });
+          }
+        } else {
+          // Teacher exists, we need to get their ID
+          try {
+            const { data: existingTeacher, error: teacherFetchError } = await supabase
+              .from('teachers')
+              .select('id')
+              .ilike('name', course.teacher)
+              .maybeSingle();
+              
+            if (teacherFetchError) {
+              console.error(`Error fetching existing teacher: ${teacherFetchError.message}`);
+            } else if (existingTeacher) {
+              teacherId = existingTeacher.id;
+              console.log(`Found existing teacher with ID ${teacherId}`);
+            }
+          } catch (teacherFetchError: any) {
+            console.error(`Error fetching teacher:`, teacherFetchError);
+          }
+        }
+      }
+      
+      // Insert the new course
+      const { data, error } = await supabase
+        .from('courses')
+        .insert({
+          name: course.name,
+          code: course.code,
+          teacher: course.teacher,
+          class_time: formattedClassTimes,
+          telegram_group: course.telegramGroup,
+          blc_link: course.blcLink,
+          blc_enroll_key: course.blcEnrollKey,
+          credit: course.credit,
+          section: course.section,
+          teacher_id: teacherId
+        })
+        .select()
+        .single();
+      
+      if (error) throw error;
+      
+      // If teacher ID exists, create the association in teacher_courses
+      if (teacherId) {
+        try {
+          const { error: associationError } = await supabase
+            .from('teacher_courses')
+            .insert({
+              teacher_id: teacherId,
+              course_id: data.id
+            });
+            
+          if (associationError) {
+            console.error(`Error creating teacher-course association: ${associationError.message}`);
+            errors.push({
+              message: `Course #${i + 1} (${course.code}): Warning - Could not associate teacher with course: ${associationError.message}`,
+              isWarning: true
+            });
+          }
+        } catch (associationError: any) {
+          console.error(`Error creating association:`, associationError);
+        }
+      }
+      
+      successCount++;
+    } catch (error: any) {
+      console.error(`Error importing course #${i + 1}:`, error);
+      errors.push({
+        message: `Course #${i + 1} (${course.code}): ${error.message || 'Unknown error'}`
+      });
+    }
+  }
+  
+  return {
+    success: successCount,
+    errors
   };
 }

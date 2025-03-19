@@ -83,6 +83,7 @@ export function LoginForm({ onSubmit, onSwitchToSignup, onForgotPassword, error 
           placeholder="Enter your email"
           icon={Mail}
           error={touched.email && !validateEmail(credentials.email) ? 'Please enter a valid email' : ''}
+          autocomplete="username email"
         />
 
         <AuthInput
@@ -93,6 +94,7 @@ export function LoginForm({ onSubmit, onSwitchToSignup, onForgotPassword, error 
           placeholder="Enter your password"
           icon={Lock}
           error={touched.password && !validatePassword(credentials.password) ? 'Password must be at least 6 characters' : ''}
+          autocomplete="current-password"
           rightElement={
             <button 
               type="button"

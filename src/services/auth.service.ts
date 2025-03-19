@@ -1,6 +1,10 @@
 import { supabase } from '../lib/supabase';
 import { getAuthErrorMessage } from '../utils/authErrors';
 import type { LoginCredentials, SignupCredentials, User } from '../types/auth';
+import type { Database } from '../types/supabase';
+
+type DbUser = Database['public']['Tables']['users']['Row'];
+type DbUserInsert = Database['public']['Tables']['users']['Insert'];
 
 // Check if "Remember me" is enabled
 const isRememberMeEnabled = () => localStorage.getItem('nesttask_remember_me') === 'true';
@@ -11,45 +15,51 @@ export async function loginUser({ email, password }: LoginCredentials): Promise<
       throw new Error('Email and password are required');
     }
 
-    // Check if "Remember me" is enabled from localStorage
-    const rememberMe = localStorage.getItem('nesttask_remember_me') === 'true';
-    console.log('Logging in with remember me:', rememberMe);
+    // Set session persistence by ensuring we have a clean session state
+    await supabase.auth.setSession({
+      access_token: '',
+      refresh_token: ''
+    });
 
     const { data: authData, error: authError } = await supabase.auth.signInWithPassword({ 
       email, 
-      password 
+      password
     });
     
     if (authError) throw authError;
     if (!authData?.user) throw new Error('No user data received');
 
+    // Store the session in localStorage for persistence
+    if (authData.session) {
+      localStorage.setItem('supabase.auth.token', JSON.stringify(authData.session));
+    }
+
     // Wait briefly for the trigger to create the profile
     await new Promise(resolve => setTimeout(resolve, 1000));
 
     // Get user profile data
-    const { data: profiles, error: profileError } = await supabase
+    const { data: profile, error: profileError } = await supabase
       .from('users')
-      .select('*')
-      .eq('id', authData.user.id);
+      .select()
+      .eq('id', authData.user.id)
+      .single();
 
     if (profileError) {
       console.error('Error fetching user profile:', profileError);
       throw new Error('Failed to fetch user profile');
     }
 
-    const profile = profiles?.[0];
     if (!profile) {
       // Create profile if it doesn't exist
       const { data: newProfile, error: createError } = await supabase
         .from('users')
         .insert({
-          id: authData.user.id,
           email: authData.user.email!,
-          name: authData.user.user_metadata?.name || authData.user.email?.split('@')[0],
+          name: authData.user.user_metadata?.name || authData.user.email?.split('@')[0] || '',
           role: authData.user.user_metadata?.role || 'user',
-          phone: authData.user.user_metadata?.phone,
-          student_id: authData.user.user_metadata?.studentId
-        })
+          created_at: new Date().toISOString(),
+          last_active: new Date().toISOString()
+        } as Partial<DbUser>)
         .select()
         .single();
 
@@ -57,25 +67,27 @@ export async function loginUser({ email, password }: LoginCredentials): Promise<
         throw new Error('Failed to create user profile');
       }
 
+      if (!newProfile) {
+        throw new Error('No profile data received after creation');
+      }
+
       return {
         id: newProfile.id,
         email: newProfile.email,
-        name: newProfile.name,
-        phone: newProfile.phone,
-        studentId: newProfile.student_id,
-        role: newProfile.role,
-        createdAt: newProfile.created_at
+        name: newProfile.name || '',
+        role: newProfile.role as 'user' | 'admin',
+        createdAt: newProfile.created_at,
+        lastActive: newProfile.last_active
       };
     }
 
     return {
       id: profile.id,
       email: profile.email,
-      name: profile.name,
-      phone: profile.phone,
-      studentId: profile.student_id,
-      role: profile.role,
-      createdAt: profile.created_at
+      name: profile.name || '',
+      role: profile.role as 'user' | 'admin',
+      createdAt: profile.created_at,
+      lastActive: profile.last_active
     };
   } catch (error: any) {
     console.error('Login error:', error);
@@ -171,9 +183,14 @@ export async function signupUser({ email, password, name, phone, studentId }: Si
 
 export async function logoutUser(): Promise<void> {
   try {
-    const { error } = await supabase.auth.signOut();
+    const { error } = await supabase.auth.signOut({
+      scope: 'local' // Only clear the local session
+    });
     if (error) throw error;
-    localStorage.removeItem('supabase.auth.token');
+    
+    // Clear only specific auth-related items
+    localStorage.removeItem('nesttask_remember_me');
+    localStorage.removeItem('nesttask_saved_email');
   } catch (error: any) {
     console.error('Logout error:', error);
     throw new Error('Failed to sign out. Please try again.');
@@ -205,4 +222,16 @@ export async function resetPassword(email: string): Promise<void> {
     console.error('Password reset error:', error);
     throw new Error(getAuthErrorMessage(error) || 'Failed to send password reset email. Please try again.');
   }
+}
+
+// Helper function to map database user to User type
+function mapDbUserToUser(dbUser: DbUser): User {
+  return {
+    id: dbUser.id,
+    email: dbUser.email,
+    name: dbUser.name || '',
+    role: dbUser.role as 'user' | 'admin',
+    createdAt: dbUser.created_at,
+    lastActive: dbUser.last_active
+  };
 }

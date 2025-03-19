@@ -9,11 +9,15 @@ import {
   updateRoutineSlot as updateRoutineSlotService,
   deleteRoutineSlot as deleteRoutineSlotService,
   activateRoutine as activateRoutineService,
-  deactivateRoutine as deactivateRoutineService
+  deactivateRoutine as deactivateRoutineService,
+  bulkImportRoutineSlots as bulkImportRoutineSlotsService,
+  exportRoutineWithSlots as exportRoutineWithSlotsService,
+  getAllSemesters as getAllSemestersService,
+  getRoutinesBySemester as getRoutinesBySemesterService
 } from '../services/routine.service';
 import type { Routine, RoutineSlot } from '../types/routine';
 import { useOfflineStatus } from './useOfflineStatus';
-import { saveToIndexedDB, getAllFromIndexedDB, STORES, getByIdFromIndexedDB } from '../utils/offlineStorage';
+import { saveToIndexedDB, getAllFromIndexedDB, STORES, getByIdFromIndexedDB, clearIndexedDBStore } from '../utils/offlineStorage';
 
 // Define timestamp for cached data
 const CACHE_TIMESTAMP_KEY = 'routines_last_fetched';
@@ -42,39 +46,12 @@ export function useRoutines() {
           setRoutines([]);
         }
       } else {
-        // When online, check if we need to refresh cache
-        const lastFetched = localStorage.getItem(CACHE_TIMESTAMP_KEY);
-        const cacheAge = lastFetched ? Date.now() - parseInt(lastFetched) : Infinity;
-        const cacheExpired = cacheAge > 1000 * 60 * 15; // 15 minutes cache lifetime
+        // Always fetch fresh data, no caching for admin dashboard
+        console.log('Admin dashboard: Always fetching fresh routine data');
+        const data = await fetchRoutines();
+        setRoutines(data);
         
-        if (forceRefresh || cacheExpired) {
-          // Fetch from API and save to IndexedDB
-          const data = await fetchRoutines();
-          setRoutines(data);
-          
-          // Store routines in IndexedDB for offline use
-          if (data && data.length > 0) {
-            await saveToIndexedDB(STORES.ROUTINES, data);
-            // Update cache timestamp
-            localStorage.setItem(CACHE_TIMESTAMP_KEY, Date.now().toString());
-            console.log('Saved routines to IndexedDB for offline use');
-          }
-        } else {
-          // Use cached data for better performance
-          console.log('Using cached routines - cache age:', Math.round(cacheAge / 1000), 'seconds');
-          const cachedRoutines = await getAllFromIndexedDB(STORES.ROUTINES);
-          if (cachedRoutines && cachedRoutines.length > 0) {
-            setRoutines(cachedRoutines);
-          } else {
-            // If cache is empty, force a refresh
-            const data = await fetchRoutines();
-            setRoutines(data);
-            if (data && data.length > 0) {
-              await saveToIndexedDB(STORES.ROUTINES, data);
-              localStorage.setItem(CACHE_TIMESTAMP_KEY, Date.now().toString());
-            }
-          }
-        }
+        // No longer saving to IndexedDB for admin dashboard
       }
     } catch (err: any) {
       console.error('Error loading routines:', err);
@@ -144,7 +121,7 @@ export function useRoutines() {
             !routine._isOfflineDeleted && 
             !routine._needsActivationSync && 
             !routine._needsDeactivationSync && 
-            !routine.slots?.some(slot => slot._isOffline || slot._isOfflineUpdated || slot._isOfflineDeleted)) {
+            !routine.slots?.some((slot: RoutineSlot) => slot._isOffline || slot._isOfflineUpdated || slot._isOfflineDeleted)) {
           continue;
         }
         
@@ -448,13 +425,30 @@ export function useRoutines() {
       } else {
         // Online mode - delete from server
         await deleteRoutineService(id);
+        
+        // Remove from state
         setRoutines(prev => prev.filter(routine => routine.id !== id));
         
-        // Also delete from IndexedDB
+        // Properly clean up IndexedDB to prevent deleted routines from reappearing
         try {
+          // Get all routines from IndexedDB
           const existingRoutines = await getAllFromIndexedDB(STORES.ROUTINES);
-          const updatedRoutines = existingRoutines.filter((r: Routine) => r.id !== id);
-          await saveToIndexedDB(STORES.ROUTINES, updatedRoutines);
+          
+          // Remove the deleted routine from the array
+          const filteredRoutines = existingRoutines.filter((r: Routine) => r.id !== id);
+          
+          // Clear the store and save the filtered routines
+          await clearIndexedDBStore(STORES.ROUTINES);
+          
+          // If there are remaining routines, save them back
+          if (filteredRoutines.length > 0) {
+            await saveToIndexedDB(STORES.ROUTINES, filteredRoutines);
+          }
+          
+          // Force cache invalidation by updating the timestamp
+          localStorage.setItem(CACHE_TIMESTAMP_KEY, Date.now().toString());
+          
+          console.log(`Routine ${id} successfully deleted from IndexedDB`);
         } catch (dbErr) {
           console.error('Error updating IndexedDB after deletion:', dbErr);
         }
@@ -565,7 +559,7 @@ export function useRoutines() {
           const routine = existingRoutines[routineIndex];
           const updatedRoutine = {
             ...routine,
-            slots: routine.slots?.map(slot =>
+            slots: routine.slots?.map((slot: RoutineSlot) =>
               slot.id === slotId 
                 ? { ...slot, ...updates, _isOfflineUpdated: true } 
                 : slot
@@ -580,7 +574,7 @@ export function useRoutines() {
               r.id === routineId
                 ? {
                     ...r,
-                    slots: r.slots?.map(slot =>
+                    slots: r.slots?.map((slot: RoutineSlot) =>
                       slot.id === slotId ? { ...slot, ...updates } : slot
                     )
                   }
@@ -597,7 +591,7 @@ export function useRoutines() {
             routine.id === routineId
               ? {
                   ...routine,
-                  slots: routine.slots?.map(slot =>
+                  slots: routine.slots?.map((slot: RoutineSlot) =>
                     slot.id === slotId ? { ...slot, ...updates } : slot
                   )
                 }
@@ -614,7 +608,7 @@ export function useRoutines() {
             const routine = existingRoutines[routineIndex];
             const updatedRoutine = {
               ...routine,
-              slots: routine.slots?.map(slot =>
+              slots: routine.slots?.map((slot: RoutineSlot) =>
                 slot.id === slotId ? { ...slot, ...updates } : slot
               )
             };
@@ -646,9 +640,9 @@ export function useRoutines() {
           
           // If it's a temp slot (created offline), remove it entirely 
           // Otherwise mark it for deletion with a flag
-          const updatedSlots = routine.slots?.map(slot => 
+          const updatedSlots = routine.slots?.map((slot: RoutineSlot) => 
             slot.id === slotId ? { ...slot, _isOfflineDeleted: true } : slot
-          ).filter(slot => 
+          ).filter((slot: RoutineSlot) => 
             !(slot.id === slotId && slot._isOffline) // Remove temporary slots immediately
           );
           
@@ -667,7 +661,7 @@ export function useRoutines() {
             routine.id === routineId
               ? {
                   ...routine,
-                  slots: routine.slots?.filter(slot => slot.id !== slotId)
+                  slots: routine.slots?.filter((slot: RoutineSlot) => slot.id !== slotId)
                 }
               : routine
           )
@@ -681,7 +675,7 @@ export function useRoutines() {
             routine.id === routineId
               ? {
                   ...routine,
-                  slots: routine.slots?.filter(slot => slot.id !== slotId)
+                  slots: routine.slots?.filter((slot: RoutineSlot) => slot.id !== slotId)
                 }
               : routine
           )
@@ -696,7 +690,7 @@ export function useRoutines() {
             const routine = existingRoutines[routineIndex];
             const updatedRoutine = {
               ...routine,
-              slots: routine.slots?.filter(slot => slot.id !== slotId)
+              slots: routine.slots?.filter((slot: RoutineSlot) => slot.id !== slotId)
             };
             
             existingRoutines[routineIndex] = updatedRoutine;
@@ -712,10 +706,89 @@ export function useRoutines() {
     }
   };
 
+  /**
+   * Bulk import multiple routine slots from JSON data
+   */
+  const bulkImportSlots = async (routineId: string, slotsData: any[]): Promise<{ success: number; errors: any[] }> => {
+    if (isOffline) {
+      return {
+        success: 0,
+        errors: [{ message: 'Bulk import is not available in offline mode' }]
+      };
+    }
+
+    try {
+      // Import slots in bulk
+      const result = await bulkImportRoutineSlotsService(routineId, slotsData);
+      
+      // Refresh routines data to include new slots
+      await loadRoutines(true);
+      
+      return result;
+    } catch (error: any) {
+      console.error('Error bulk importing slots:', error);
+      return {
+        success: 0,
+        errors: [{ message: error.message || 'Failed to import slots' }]
+      };
+    }
+  };
+
+  // Export a routine with all its slots as a JSON file
+  const exportRoutine = async (routineId: string) => {
+    try {
+      setLoading(true);
+      const data = await exportRoutineWithSlotsService(routineId);
+      return data;
+    } catch (err: any) {
+      setError(err.message);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  // Get all semesters for filtering
+  const getSemesters = async () => {
+    try {
+      return await getAllSemestersService();
+    } catch (err: any) {
+      console.error('Error fetching semesters:', err);
+      return [];
+    }
+  };
+  
+  // Get routines filtered by semester
+  const getRoutinesBySemester = async (semester: string) => {
+    try {
+      setLoading(true);
+      return await getRoutinesBySemesterService(semester);
+    } catch (err: any) {
+      setError(err.message);
+      return [];
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Refresh routines with fresh data from server
+  const refreshRoutines = useCallback(async () => {
+    if (!isOffline) {
+      // For admin dashboard, always load fresh data without cache
+      console.log('Admin dashboard: Refreshing routines with fresh data');
+      
+      // Load fresh data from server
+      await loadRoutines(true);
+    }
+  }, [isOffline, loadRoutines]);
+
   return {
     routines,
     loading,
     error,
+    syncInProgress,
+    loadRoutines,
+    syncOfflineChanges,
     createRoutine,
     updateRoutine,
     deleteRoutine,
@@ -820,9 +893,10 @@ export function useRoutines() {
         throw err;
       }
     },
-    syncOfflineChanges,
-    refreshRoutines: () => loadRoutines(true),
-    isSyncing: syncInProgress,
-    isOffline
+    bulkImportSlots,
+    exportRoutine,
+    getSemesters,
+    getRoutinesBySemester,
+    refreshRoutines
   };
 }

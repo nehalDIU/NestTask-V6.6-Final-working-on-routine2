@@ -6,6 +6,7 @@ export interface Teacher {
   email?: string;
   phone: string;
   department?: string;
+  officeRoom?: string;
   createdAt: string;
   createdBy: string;
   courses?: Course[];

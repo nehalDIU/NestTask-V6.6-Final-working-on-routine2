@@ -1,12 +1,12 @@
-import { Loader2 } from 'lucide-react';
-
 export function LoadingSpinner() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-50">
-      <div className="text-center animate-scale-in">
-        <Loader2 className="w-12 h-12 animate-spin text-blue-600 mx-auto mb-4" />
-        <p className="text-gray-600 text-lg">Loading your tasks...</p>
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+      <div className="text-center">
+        <div className="spinner mx-auto mb-4"></div>
+        <p className="text-gray-600 dark:text-gray-400 text-sm">Loading...</p>
       </div>
     </div>
   );
 }
+
+// Uses the same spinner CSS from index.html

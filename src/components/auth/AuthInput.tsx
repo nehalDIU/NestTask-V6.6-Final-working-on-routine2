@@ -11,6 +11,7 @@ export interface AuthInputProps {
   error?: string;
   required?: boolean;
   rightElement?: ReactNode;
+  autocomplete?: string;
 }
 
 export function AuthInput({
@@ -22,7 +23,8 @@ export function AuthInput({
   icon: Icon,
   error,
   required = true,
-  rightElement
+  rightElement,
+  autocomplete
 }: AuthInputProps) {
   return (
     <div>
@@ -45,6 +47,7 @@ export function AuthInput({
           `}
           placeholder={placeholder}
           required={required}
+          autoComplete={autocomplete}
         />
         {rightElement && (
           <div className="absolute right-3 top-1/2 transform -translate-y-1/2">

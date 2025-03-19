@@ -320,34 +320,44 @@ export function RoutineView() {
                 key={slot.id}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="bg-white dark:bg-gray-800 rounded-md overflow-hidden shadow-sm hover:shadow-md transition-all duration-300 border border-gray-100 dark:border-gray-700/50"
+                className="bg-white dark:bg-gray-800 rounded-md sm:rounded-lg md:rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-300 border border-gray-100 dark:border-gray-700/50"
               >
                 <div className="flex flex-col sm:flex-row items-stretch">
                   {/* Time Column */}
-                  <div className="w-full sm:w-[80px] md:w-[100px] bg-gray-100 dark:bg-gray-700 flex flex-row sm:flex-col justify-between sm:justify-center items-center p-2 sm:p-3 md:p-4">
-                    <div className="text-base sm:text-lg md:text-xl font-semibold text-gray-700 dark:text-gray-200">
-                      {format(new Date(`2000-01-01T${slot.startTime}`), 'HH:mm')}
+                  <div className="w-[70px] xs:w-[90px] sm:w-[80px] md:w-[100px] lg:w-[120px] bg-gray-50 dark:bg-gray-800/40 flex flex-col justify-between items-center py-3 px-2 sm:p-3 md:p-4 border-b sm:border-b-0 sm:border-r border-gray-100 dark:border-gray-700/50">
+                    <div className="flex flex-col items-center">
+                      <div className="text-lg sm:text-base md:text-lg lg:text-xl font-medium text-gray-700 dark:text-gray-200">
+                        {format(new Date(`2000-01-01T${slot.startTime}`), 'h:mm')}
+                      </div>
                     </div>
-                    <div className="flex items-center justify-center w-8 sm:h-4 sm:mt-1 sm:mb-1">
-                      <div className="w-6 border-t border-gray-300 dark:border-gray-600 sm:w-10"></div>
+                    
+                    <div className="flex flex-col items-center justify-center py-2 sm:py-3 md:py-4 w-full space-y-2">
+                      <div className="w-8 sm:w-10 md:w-12 border-t border-gray-300 dark:border-gray-600"></div>
+                      <div className="w-6 sm:w-8 md:w-10 border-t border-gray-300 dark:border-gray-600"></div>
+                      <div className="w-4 sm:w-6 md:w-8 border-t border-gray-300 dark:border-gray-600"></div>
+                      <div className="w-6 sm:w-8 md:w-10 border-t border-gray-300 dark:border-gray-600"></div>
+                      <div className="w-8 sm:w-10 md:w-12 border-t border-gray-300 dark:border-gray-600"></div>
                     </div>
-                    <div className="text-base sm:text-lg md:text-xl font-semibold text-gray-700 dark:text-gray-200">
-                      {format(new Date(`2000-01-01T${slot.endTime}`), 'HH:mm')}
+                    
+                    <div className="flex flex-col items-center">
+                      <div className="text-lg sm:text-base md:text-lg lg:text-xl font-medium text-gray-700 dark:text-gray-200">
+                        {format(new Date(`2000-01-01T${slot.endTime}`), 'h:mm')}
+                      </div>
                     </div>
                   </div>
 
                   {/* Content Column */}
-                  <div className="flex-1 p-2 sm:p-3 md:p-4">
-                    <h3 className="text-sm sm:text-base md:text-lg font-semibold mb-1.5">
+                  <div className="flex-1 p-2.5 xs:p-3 sm:p-3.5 md:p-4.5">
+                    <h3 className="text-xs xs:text-sm sm:text-base md:text-lg font-semibold mb-1 sm:mb-1.5 md:mb-2 line-clamp-2">
                       {slot.courseName || (slot.course ? slot.course.name : 'No Course Name')}
                     </h3>
                     
-                    <div className="grid grid-cols-2 gap-y-0.5 text-xs sm:text-sm">
+                    <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 text-[11px] xs:text-xs sm:text-sm">
                       <div className="text-gray-500 dark:text-gray-400">Course:</div>
-                      <div className="text-right">{slot.course?.code || 'N/A'}</div>
+                      <div className="text-right font-medium">{slot.course?.code || 'N/A'}</div>
                       
                       <div className="text-gray-500 dark:text-gray-400">Section:</div>
-                      <div className="text-right">{slot.section || 'N/A'}</div>
+                      <div className="text-right font-medium">{slot.section || 'N/A'}</div>
                       
                       <div className="text-gray-500 dark:text-gray-400">Teacher:</div>
                       <div className="text-right">
@@ -358,7 +368,7 @@ export function RoutineView() {
                               const fullTeacher = teachers.find(t => t.id === slot.teacherId);
                               setSelectedTeacher(fullTeacher || null);
                             }} 
-                            className="text-blue-500 hover:underline"
+                            className="text-blue-500 hover:text-blue-600 dark:hover:text-blue-400 font-medium"
                             title={slot.teacherName || (slot.teacher ? slot.teacher.name : 'N/A')}
                           >
                             {getInitials(slot.teacherName || (slot.teacher ? slot.teacher.name : undefined))}
@@ -369,7 +379,7 @@ export function RoutineView() {
                       </div>
                       
                       <div className="text-gray-500 dark:text-gray-400">Room:</div>
-                      <div className="text-right">{slot.roomNumber || 'N/A'}</div>
+                      <div className="text-right font-medium">{slot.roomNumber || 'N/A'}</div>
                     </div>
                   </div>
                 </div>

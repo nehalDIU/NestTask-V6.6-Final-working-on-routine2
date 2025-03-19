@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { X, Clock, GitBranch as BrandTelegram } from 'lucide-react';
+import { X, GitBranch as BrandTelegram, Link, Lock, CreditCard, Hash } from 'lucide-react';
 import type { Course } from '../../../types/course';
 
 interface CourseEditModalProps {
@@ -13,8 +13,11 @@ export function CourseEditModal({ course, onClose, onUpdate }: CourseEditModalPr
     name: course.name,
     code: course.code,
     teacher: course.teacher,
-    classTime: course.classTime,
-    telegramGroup: course.telegramGroup || ''
+    credit: course.credit,
+    section: course.section || '',
+    telegramGroup: course.telegramGroup || '',
+    blcLink: course.blcLink || '',
+    blcEnrollKey: course.blcEnrollKey || ''
   });
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -85,20 +88,67 @@ export function CourseEditModal({ course, onClose, onUpdate }: CourseEditModalPr
               />
             </div>
 
-            {/* Class Time */}
+            {/* Credit */}
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Class Time
+                Credit
+              </label>
+              <div className="relative">
+                <input
+                  type="number"
+                  value={formData.credit || ''}
+                  onChange={(e) => setFormData(prev => ({ ...prev, credit: e.target.value ? parseInt(e.target.value) : undefined }))}
+                  className="w-full pl-10 pr-4 py-2 border dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                />
+                <CreditCard className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+              </div>
+            </div>
+
+            {/* Section */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Section
               </label>
               <div className="relative">
                 <input
                   type="text"
-                  value={formData.classTime}
-                  onChange={(e) => setFormData(prev => ({ ...prev, classTime: e.target.value }))}
+                  value={formData.section}
+                  onChange={(e) => setFormData(prev => ({ ...prev, section: e.target.value }))}
                   className="w-full pl-10 pr-4 py-2 border dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-                  required
                 />
-                <Clock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                <Hash className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+              </div>
+            </div>
+
+            {/* BLC Link */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                BLC Link (Optional)
+              </label>
+              <div className="relative">
+                <input
+                  type="url"
+                  value={formData.blcLink}
+                  onChange={(e) => setFormData(prev => ({ ...prev, blcLink: e.target.value }))}
+                  className="w-full pl-10 pr-4 py-2 border dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                />
+                <Link className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+              </div>
+            </div>
+
+            {/* BLC Enroll Key */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                BLC Enroll Key (Optional)
+              </label>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={formData.blcEnrollKey}
+                  onChange={(e) => setFormData(prev => ({ ...prev, blcEnrollKey: e.target.value }))}
+                  className="w-full pl-10 pr-4 py-2 border dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                />
+                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
               </div>
             </div>
 

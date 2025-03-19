@@ -3,20 +3,20 @@ import {
   Book, 
   Code, 
   User, 
-  Clock, 
   GitBranch as BrandTelegram, 
   Plus, 
   Lock, 
   Link,
-  MapPin,
-  X,
-  GraduationCap
+  GraduationCap,
+  Hash,
+  CreditCard
 } from 'lucide-react';
-import type { NewCourse, ClassTime } from '../../../types/course';
+import type { NewCourse } from '../../../types/course';
 import type { Teacher } from '../../../types/teacher';
+import type { Course } from '../../../types/course';
 
 interface CourseFormProps {
-  onSubmit: (course: NewCourse) => Promise<void>;
+  onSubmit: (course: NewCourse) => Promise<Course | void>;
   teachers: Teacher[];
 }
 
@@ -29,16 +29,11 @@ export function CourseForm({ onSubmit, teachers }: CourseFormProps) {
     telegramGroup: '',
     blcLink: '',
     blcEnrollKey: '',
-    teacherId: undefined
-  });
-  const [newClassTime, setNewClassTime] = useState<ClassTime>({ 
-    day: 'Monday', 
-    time: '',
-    classroom: '' 
+    teacherId: undefined,
+    credit: undefined,
+    section: ''
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const weekDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -58,28 +53,13 @@ export function CourseForm({ onSubmit, teachers }: CourseFormProps) {
         telegramGroup: '',
         blcLink: '',
         blcEnrollKey: '',
-        teacherId: undefined
+        teacherId: undefined,
+        credit: undefined,
+        section: ''
       });
     } finally {
       setIsSubmitting(false);
     }
-  };
-
-  const addClassTime = () => {
-    if (newClassTime.time) {
-      setCourse(prev => ({
-        ...prev,
-        classTimes: [...prev.classTimes, newClassTime]
-      }));
-      setNewClassTime({ day: 'Monday', time: '', classroom: '' });
-    }
-  };
-
-  const removeClassTime = (index: number) => {
-    setCourse(prev => ({
-      ...prev,
-      classTimes: prev.classTimes.filter((_, i) => i !== index)
-    }));
   };
 
   return (
@@ -126,6 +106,38 @@ export function CourseForm({ onSubmit, teachers }: CourseFormProps) {
               required
             />
             <Code className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+          </div>
+        </div>
+
+        {/* Credit */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            Credit
+          </label>
+          <div className="relative">
+            <input
+              type="number"
+              value={course.credit || ''}
+              onChange={(e) => setCourse(prev => ({ ...prev, credit: e.target.value ? parseInt(e.target.value) : undefined }))}
+              className="w-full pl-10 pr-4 py-2 border dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+            />
+            <CreditCard className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+          </div>
+        </div>
+
+        {/* Section */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            Section
+          </label>
+          <div className="relative">
+            <input
+              type="text"
+              value={course.section || ''}
+              onChange={(e) => setCourse(prev => ({ ...prev, section: e.target.value }))}
+              className="w-full pl-10 pr-4 py-2 border dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+            />
+            <Hash className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
           </div>
         </div>
 
@@ -178,78 +190,10 @@ export function CourseForm({ onSubmit, teachers }: CourseFormProps) {
           </div>
         )}
 
-        {/* Class Times */}
-        <div className="md:col-span-2">
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Class Times & Location
-          </label>
-          <div className="space-y-3">
-            <div className="flex gap-3">
-              <select
-                value={newClassTime.day}
-                onChange={(e) => setNewClassTime(prev => ({ ...prev, day: e.target.value }))}
-                className="pl-10 pr-4 py-2 border dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-              >
-                {weekDays.map(day => (
-                  <option key={day} value={day}>{day}</option>
-                ))}
-              </select>
-              <div className="relative flex-1">
-                <input
-                  type="time"
-                  value={newClassTime.time}
-                  onChange={(e) => setNewClassTime(prev => ({ ...prev, time: e.target.value }))}
-                  className="w-full pl-10 pr-4 py-2 border dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-                />
-                <Clock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-              </div>
-              <div className="relative flex-1">
-                <input
-                  type="text"
-                  value={newClassTime.classroom || ''}
-                  onChange={(e) => setNewClassTime(prev => ({ ...prev, classroom: e.target.value }))}
-                  placeholder="Enter classroom"
-                  className="w-full pl-10 pr-4 py-2 border dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-                />
-                <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-              </div>
-              <button
-                type="button"
-                onClick={addClassTime}
-                className="px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors"
-              >
-                Add Time
-              </button>
-            </div>
-
-            {/* Display added class times */}
-            <div className="flex flex-wrap gap-2">
-              {course.classTimes.map((classTime, index) => (
-                <div
-                  key={index}
-                  className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 rounded-lg"
-                >
-                  <span className="text-sm text-blue-700 dark:text-blue-300">
-                    {classTime.day} at {classTime.time}
-                    {classTime.classroom && ` - ${classTime.classroom}`}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => removeClassTime(index)}
-                    className="text-blue-700 dark:text-blue-300 hover:text-blue-900 dark:hover:text-blue-100"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
         {/* BLC Link */}
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            BLC Link
+            BLC Link (Optional)
           </label>
           <div className="relative">
             <input
@@ -266,7 +210,7 @@ export function CourseForm({ onSubmit, teachers }: CourseFormProps) {
         {/* BLC Enroll Key */}
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            BLC Enroll Key
+            BLC Enroll Key (Optional)
           </label>
           <div className="relative">
             <input

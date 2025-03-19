@@ -8,6 +8,8 @@ export interface Course {
   telegramGroup?: string;
   blcLink?: string;
   blcEnrollKey?: string;
+  credit?: number;
+  section?: string;
   createdAt: string;
   createdBy: string;
   _isOffline?: boolean;

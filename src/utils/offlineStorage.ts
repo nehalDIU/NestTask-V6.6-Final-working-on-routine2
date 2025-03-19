@@ -209,6 +209,7 @@ export async function clearIndexedDBStore(storeName: string): Promise<void> {
       const request = store.clear();
       
       request.onsuccess = () => {
+        console.log(`Successfully cleared ${storeName} store`);
         resolve();
       };
       

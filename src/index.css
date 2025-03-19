@@ -85,6 +85,11 @@
   to { opacity: 1; transform: translateY(0); }
 }
 
+@keyframes fadeOut {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(10px); }
+}
+
 @keyframes slideUp {
   from { opacity: 0; transform: translateY(20px); }
   to { opacity: 1; transform: translateY(0); }
@@ -230,6 +235,33 @@
 /* Custom animations for graph components */
 .animate-fadeIn {
   animation: fadeIn 0.3s ease-in-out;
+}
+
+/* Notification animations */
+.animate-fadeIn {
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+.animate-fadeOut {
+  animation: fadeOut 0.3s ease-in-out forwards;
+}
+
+/* Toast notification styles */
+.toast-notification {
+  @apply fixed bottom-4 right-4 px-4 py-3 rounded-xl shadow-lg z-[9999];
+  animation: slideUp 0.3s ease-out, fadeOut 0.3s ease-in-out 2.7s forwards;
+}
+
+.toast-notification.success {
+  @apply bg-green-500 text-white;
+}
+
+.toast-notification.error {
+  @apply bg-red-500 text-white;
+}
+
+.toast-notification.info {
+  @apply bg-blue-500 text-white;
 }
 
 /* Add more custom styles here */

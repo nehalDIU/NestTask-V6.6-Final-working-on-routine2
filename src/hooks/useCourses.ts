@@ -329,6 +329,124 @@ export function useCourses() {
     }
   };
 
+  // Sync offline changes
+  const syncOfflineChanges = useCallback(async () => {
+    if (isOffline) {
+      console.log('Cannot sync while offline');
+      return false;
+    }
+
+    try {
+      console.log('Syncing offline course changes...');
+      const offlineCourses = await getAllFromIndexedDB(STORES.COURSES);
+      
+      // Handle created courses (have _isOffline flag)
+      const createdCourses = offlineCourses.filter(c => c._isOffline && !c._isOfflineDeleted);
+      
+      for (const course of createdCourses) {
+        // Remove offline ID and flags before sending to server
+        const { id, _isOffline, _isOfflineUpdated, _isOfflineDeleted, ...courseData } = course;
+        
+        // Create in Supabase
+        const { data, error } = await supabase
+          .from('courses')
+          .insert(courseData)
+          .select()
+          .single();
+          
+        if (error) {
+          console.error('Error syncing created course:', error);
+          continue;
+        }
+        
+        // Replace the offline entry with the server entry
+        const newCourse = data as Course;
+        
+        // Update local state
+        setCourses(prev => [
+          ...prev.filter(c => c.id !== id),
+          newCourse
+        ]);
+        
+        // Update IndexedDB
+        const updatedOfflineCourses = offlineCourses.filter(c => c.id !== id);
+        updatedOfflineCourses.push(newCourse);
+        await saveToIndexedDB(STORES.COURSES, updatedOfflineCourses);
+      }
+      
+      // Handle updated courses (have _isOfflineUpdated flag)
+      const updatedCourses = offlineCourses.filter(c => c._isOfflineUpdated && !c._isOffline && !c._isOfflineDeleted);
+      
+      for (const course of updatedCourses) {
+        // Remove flags before sending to server
+        const { _isOffline, _isOfflineUpdated, _isOfflineDeleted, ...courseData } = course;
+        
+        // Update in Supabase
+        const { data, error } = await supabase
+          .from('courses')
+          .update(courseData)
+          .eq('id', course.id)
+          .select()
+          .single();
+          
+        if (error) {
+          console.error('Error syncing updated course:', error);
+          continue;
+        }
+        
+        // Update local state with server response
+        const updatedCourse = data as Course;
+        setCourses(prev => prev.map(c => c.id === updatedCourse.id ? updatedCourse : c));
+        
+        // Update IndexedDB
+        await saveToIndexedDB(STORES.COURSES, updatedCourse);
+      }
+      
+      // Handle deleted courses (have _isOfflineDeleted flag)
+      const deletedCourses = offlineCourses.filter(c => c._isOfflineDeleted && !c._isOffline);
+      
+      for (const course of deletedCourses) {
+        // Delete from Supabase
+        const { error } = await supabase
+          .from('courses')
+          .delete()
+          .eq('id', course.id);
+          
+        if (error) {
+          console.error('Error syncing deleted course:', error);
+          continue;
+        }
+        
+        // Update local state
+        setCourses(prev => prev.filter(c => c.id !== course.id));
+        
+        // Update IndexedDB
+        const updatedOfflineCourses = offlineCourses.filter(c => c.id !== course.id);
+        await saveToIndexedDB(STORES.COURSES, updatedOfflineCourses);
+      }
+      
+      console.log('Course sync completed successfully');
+      return true;
+    } catch (err) {
+      console.error('Error syncing courses:', err);
+      return false;
+    }
+  }, [isOffline]);
+
+  // Load courses on mount
+  useEffect(() => {
+    loadCourses();
+  }, [loadCourses]);
+
+  // Register the sync function globally so other components can access it
+  useEffect(() => {
+    window.syncCoursesOfflineChanges = syncOfflineChanges;
+    
+    return () => {
+      delete window.syncCoursesOfflineChanges;
+    };
+  }, [syncOfflineChanges]);
+
   return {
     courses,
     materials,
@@ -343,6 +461,7 @@ export function useCourses() {
     bulkImportCourses: handleBulkImportCourses,
     refreshCourses: () => loadCourses(true),
     refreshMaterials: () => loadMaterials(true),
-    isOffline
+    isOffline,
+    syncOfflineChanges
   };
 }

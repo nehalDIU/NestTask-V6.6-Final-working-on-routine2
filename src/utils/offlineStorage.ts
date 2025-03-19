@@ -4,7 +4,7 @@
 
 // IndexedDB database name and version
 export const DB_NAME = 'nesttask_offline_db';
-export const DB_VERSION = 3; // Update version to 3
+export const DB_VERSION = 3;
 
 // Store names for different types of data
 export const STORES = {
@@ -16,24 +16,58 @@ export const STORES = {
   TEACHERS: 'teachers'
 };
 
+// Critical stores that need offline support
+export const CRITICAL_STORES = [STORES.TASKS, STORES.ROUTINES, STORES.COURSES];
+
+// Request persistent storage to prevent automatic cleanup
+export const requestPersistentStorage = async () => {
+  if ('storage' in navigator && 'persist' in navigator.storage) {
+    try {
+      const isPersisted = await navigator.storage.persist();
+      console.log(`Persistent storage granted: ${isPersisted}`);
+      return isPersisted;
+    } catch (error) {
+      console.error('Error requesting persistent storage:', error);
+      return false;
+    }
+  }
+  return false;
+};
+
+// Check available storage space
+export const checkStorageSpace = async () => {
+  if ('storage' in navigator && 'estimate' in navigator.storage) {
+    try {
+      const {quota, usage} = await navigator.storage.estimate();
+      const availableSpace = quota && usage ? quota - usage : 0;
+      console.log(`Storage space - Total: ${quota}, Used: ${usage}, Available: ${availableSpace}`);
+      return {quota, usage, availableSpace};
+    } catch (error) {
+      console.error('Error checking storage space:', error);
+      return null;
+    }
+  }
+  return null;
+};
+
 /**
  * Initialize the IndexedDB database
  */
 export const openDatabase = () => {
-  return new Promise((resolve, reject) => {
+  return new Promise<IDBDatabase>((resolve, reject) => {
     const request = window.indexedDB.open(DB_NAME, DB_VERSION);
 
-    request.onerror = (event) => {
+    request.onerror = (event: Event) => {
       console.error('Error opening IndexedDB', event);
       reject('Error opening IndexedDB');
     };
 
-    request.onsuccess = (event) => {
+    request.onsuccess = (event: Event) => {
       const db = (event.target as IDBOpenDBRequest).result;
       resolve(db);
     };
 
-    request.onupgradeneeded = (event) => {
+    request.onupgradeneeded = (event: IDBVersionChangeEvent) => {
       const db = (event.target as IDBOpenDBRequest).result;
       const oldVersion = event.oldVersion;
 
@@ -77,6 +111,14 @@ export const openDatabase = () => {
 };
 
 /**
+ * Check if a store is critical (needs offline support)
+ * @param storeName The name of the store to check
+ */
+export const isCriticalStore = (storeName: string): boolean => {
+  return CRITICAL_STORES.includes(storeName);
+};
+
+/**
  * Save data to IndexedDB
  * @param storeName The name of the store to save data to
  * @param data The data to save
@@ -88,27 +130,80 @@ export async function saveToIndexedDB(storeName: string, data: any): Promise<voi
       const transaction = db.transaction(storeName, 'readwrite');
       const store = transaction.objectStore(storeName);
       
-      // If data is an array, add each item individually
-      if (Array.isArray(data)) {
-        data.forEach(item => {
-          store.put(item);
+      // Add offline flag for critical stores
+      if (isCriticalStore(storeName)) {
+        // Mark data for offline sync
+        const isArray = Array.isArray(data);
+        const dataToSave = isArray ? data.map((item: any) => ({
+          ...item,
+          _lastUpdated: new Date().toISOString(),
+          _needsSync: true
+        })) : {
+          ...data,
+          _lastUpdated: new Date().toISOString(),
+          _needsSync: true
+        };
+        
+        // Log transaction start with priority notice
+        console.debug(`Starting priority transaction to save data to ${storeName}`, {
+          dataType: typeof data,
+          isArray,
+          itemCount: isArray ? dataToSave.length : 1,
+          priority: 'critical'
         });
+        
+        // Save the data with offline flags
+        if (isArray) {
+          dataToSave.forEach(item => {
+            store.put(item);
+          });
+        } else {
+          store.put(dataToSave);
+        }
       } else {
-        // Otherwise, add the single item
-        store.put(data);
+        // Log transaction start
+        console.debug(`Starting transaction to save data to ${storeName}`, {
+          dataType: typeof data,
+          isArray: Array.isArray(data),
+          itemCount: Array.isArray(data) ? data.length : 1
+        });
+        
+        // Regular save for non-critical data
+        if (Array.isArray(data)) {
+          data.forEach(item => {
+            store.put(item);
+          });
+        } else {
+          store.put(data);
+        }
       }
       
       transaction.oncomplete = () => {
+        console.debug(`Successfully saved data to ${storeName}`);
         resolve();
       };
       
       transaction.onerror = (event) => {
-        console.error(`Error saving to ${storeName}:`, (event.target as IDBTransaction).error);
-        reject((event.target as IDBTransaction).error);
+        const error = (event.target as IDBTransaction).error;
+        console.error(`Error saving to ${storeName}:`, {
+          error,
+          errorName: error?.name,
+          errorMessage: error?.message,
+          dataType: typeof data,
+          isArray: Array.isArray(data),
+          itemCount: Array.isArray(data) ? data.length : 1
+        });
+        reject(error);
       };
     });
   } catch (error) {
-    console.error('IndexedDB save error:', error);
+    console.error('IndexedDB save error:', {
+      error,
+      storeName,
+      dataType: typeof data,
+      isArray: Array.isArray(data),
+      itemCount: Array.isArray(data) ? data.length : 1
+    });
     throw error;
   }
 }
@@ -126,16 +221,30 @@ export async function getAllFromIndexedDB(storeName: string): Promise<any[]> {
       const request = store.getAll();
       
       request.onsuccess = () => {
-        resolve(request.result);
+        const result = request.result;
+        // Log with priority info if critical store
+        console.debug(`Successfully retrieved data from ${storeName}`, {
+          itemCount: result.length,
+          priority: isCriticalStore(storeName) ? 'critical' : 'normal'
+        });
+        resolve(result);
       };
       
       request.onerror = (event) => {
-        console.error(`Error getting data from ${storeName}:`, (event.target as IDBRequest).error);
-        reject((event.target as IDBRequest).error);
+        const error = (event.target as IDBRequest).error;
+        console.error(`Error getting data from ${storeName}:`, {
+          error,
+          errorName: error?.name,
+          errorMessage: error?.message
+        });
+        reject(error);
       };
     });
   } catch (error) {
-    console.error('IndexedDB get error:', error);
+    console.error('IndexedDB get error:', {
+      error,
+      storeName
+    });
     return [];
   }
 }
@@ -154,16 +263,30 @@ export async function getByIdFromIndexedDB(storeName: string, id: string): Promi
       const request = store.get(id);
       
       request.onsuccess = () => {
+        console.debug(`Successfully retrieved item from ${storeName}`, {
+          id,
+          found: !!request.result
+        });
         resolve(request.result);
       };
       
       request.onerror = (event) => {
-        console.error(`Error getting item from ${storeName}:`, (event.target as IDBRequest).error);
-        reject((event.target as IDBRequest).error);
+        const error = (event.target as IDBRequest).error;
+        console.error(`Error getting item from ${storeName}:`, {
+          error,
+          errorName: error?.name,
+          errorMessage: error?.message,
+          id
+        });
+        reject(error);
       };
     });
   } catch (error) {
-    console.error('IndexedDB get by ID error:', error);
+    console.error('IndexedDB get by ID error:', {
+      error,
+      storeName,
+      id
+    });
     return null;
   }
 }
@@ -182,16 +305,27 @@ export async function deleteFromIndexedDB(storeName: string, id: string): Promis
       const request = store.delete(id);
       
       request.onsuccess = () => {
+        console.debug(`Successfully deleted item from ${storeName}`, { id });
         resolve();
       };
       
       request.onerror = (event) => {
-        console.error(`Error deleting from ${storeName}:`, (event.target as IDBRequest).error);
-        reject((event.target as IDBRequest).error);
+        const error = (event.target as IDBRequest).error;
+        console.error(`Error deleting from ${storeName}:`, {
+          error,
+          errorName: error?.name,
+          errorMessage: error?.message,
+          id
+        });
+        reject(error);
       };
     });
   } catch (error) {
-    console.error('IndexedDB delete error:', error);
+    console.error('IndexedDB delete error:', {
+      error,
+      storeName,
+      id
+    });
     throw error;
   }
 }
@@ -209,17 +343,25 @@ export async function clearIndexedDBStore(storeName: string): Promise<void> {
       const request = store.clear();
       
       request.onsuccess = () => {
-        console.log(`Successfully cleared ${storeName} store`);
+        console.debug(`Successfully cleared ${storeName} store`);
         resolve();
       };
       
       request.onerror = (event) => {
-        console.error(`Error clearing ${storeName}:`, (event.target as IDBRequest).error);
-        reject((event.target as IDBRequest).error);
+        const error = (event.target as IDBRequest).error;
+        console.error(`Error clearing ${storeName}:`, {
+          error,
+          errorName: error?.name,
+          errorMessage: error?.message
+        });
+        reject(error);
       };
     });
   } catch (error) {
-    console.error('IndexedDB clear error:', error);
+    console.error('IndexedDB clear error:', {
+      error,
+      storeName
+    });
     throw error;
   }
 } 

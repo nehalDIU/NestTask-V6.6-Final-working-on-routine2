@@ -1,83 +1,62 @@
-import { prefetchResources } from './prefetch';
+import { prefetchRoute } from './serviceWorker';
 
-// Import functions for each page
-const importAdminDashboard = () => import('../pages/AdminDashboard').then(module => ({ default: module.AdminDashboard }));
-const importUpcomingPage = () => import('../pages/UpcomingPage').then(module => ({ default: module.UpcomingPage }));
-const importSearchPage = () => import('../pages/SearchPage').then(module => ({ default: module.SearchPage }));
-const importNotificationsPage = () => import('../pages/NotificationsPage').then(module => ({ default: module.NotificationsPage }));
-const importCoursePage = () => import('../pages/CoursePage').then(module => ({ default: module.CoursePage }));
-const importStudyMaterialsPage = () => import('../pages/StudyMaterialsPage').then(module => ({ default: module.StudyMaterialsPage }));
-const importRoutinePage = () => import('../pages/RoutinePage').then(module => ({ default: module.RoutinePage }));
-
-// Map of route keys to import functions
-const routeImports = {
-  'admin': importAdminDashboard,
-  'upcoming': importUpcomingPage,
-  'search': importSearchPage,
-  'notifications': importNotificationsPage,
-  'courses': importCoursePage,
-  'study-materials': importStudyMaterialsPage,
-  'routine': importRoutinePage
+// Routes that should be preloaded
+export const ROUTES = {
+  HOME: '/',
+  TASKS: '/tasks',
+  ROUTINES: '/routines',
+  COURSES: '/courses',
+  NOTIFICATIONS: '/notifications',
+  PROFILE: '/profile',
+  DASHBOARD: '/dashboard'
 };
 
 /**
- * Preload routes based on predicted navigation paths
- * @param predictedRoutes Array of predicted route keys
- * @param limit Maximum number of routes to preload
+ * Preload routes in a progressive manner, starting with the most critical ones
+ * @param routes An array of routes to preload
  */
-export function preloadPredictedRoutes(predictedRoutes: string[], limit = 2) {
-  if (!Array.isArray(predictedRoutes) || predictedRoutes.length === 0 || !navigator.onLine) {
+export const preloadPredictedRoutes = async (routes: string[]) => {
+  if (!navigator.onLine) {
+    console.debug('Skipping route preloading while offline');
     return;
   }
-  
-  // Limit the number of routes to preload
-  const routesToPreload = predictedRoutes.slice(0, limit);
-  
-  // Map routes to prefetch resources
-  const resources = routesToPreload
-    .map(route => {
-      const importFn = routeImports[route as keyof typeof routeImports];
-      
-      if (!importFn) return null;
-      
-      return {
-        type: 'route' as const,
-        key: route,
-        loader: importFn,
-        options: { priority: 'high' as const }
-      };
-    })
-    .filter(Boolean) as Array<{
-      type: 'route';
-      key: string;
-      loader: () => Promise<any>;
-      options: { priority: 'high' };
-    }>;
-  
-  // Prefetch resources if any
-  if (resources.length > 0) {
-    prefetchResources(resources);
-    console.debug(`Preloaded predicted routes: ${routesToPreload.join(', ')}`);
+
+  // High-priority routes to preload immediately
+  const highPriorityRoutes = routes.filter(route => 
+    route === ROUTES.HOME || 
+    route === ROUTES.TASKS || 
+    route === ROUTES.ROUTINES
+  );
+
+  // Low-priority routes to preload with a delay
+  const lowPriorityRoutes = routes.filter(route => 
+    !highPriorityRoutes.includes(route)
+  );
+
+  // Process high priority routes immediately
+  console.debug('Preloading high priority routes:', highPriorityRoutes);
+  highPriorityRoutes.forEach(route => {
+    prefetchRoute(route);
+  });
+
+  // Process low priority routes with a delay
+  if (lowPriorityRoutes.length > 0) {
+    setTimeout(() => {
+      console.debug('Preloading low priority routes:', lowPriorityRoutes);
+      lowPriorityRoutes.forEach(route => {
+        prefetchRoute(route);
+      });
+    }, 3000); // 3 second delay for non-critical routes
   }
-}
+};
 
 /**
- * Preload a specific route directly
- * @param route Route key to preload
+ * Manually trigger preloading for a specific route
+ * @param route Route to preload
  */
-export function preloadRoute(route: string) {
-  const importFn = routeImports[route as keyof typeof routeImports];
+export const preloadRoute = (route: string) => {
+  if (!navigator.onLine) return;
   
-  if (!importFn || !navigator.onLine) {
-    return;
-  }
-  
-  prefetchResources([{
-    type: 'route' as const,
-    key: route,
-    loader: importFn,
-    options: { priority: 'high' as const }
-  }]);
-  
-  console.debug(`Preloaded route: ${route}`);
-} 
+  console.debug(`Manually preloading route: ${route}`);
+  prefetchRoute(route);
+}; 

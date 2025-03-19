@@ -4,11 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NestTask - Offline</title>
-  <link rel="icon" type="image/svg+xml" href="/icons/favicon.ico" />
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
-      background-color: #f5f5f5;
+      background-color: #f5f7fb;
       color: #333;
       display: flex;
       flex-direction: column;
@@ -22,40 +21,39 @@
     .container {
       max-width: 500px;
       background-color: white;
-      border-radius: 12px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      border-radius: 8px;
       padding: 30px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
     }
     h1 {
-      color: #4f46e5;
+      color: #0284c7;
       margin-bottom: 10px;
     }
     p {
-      line-height: 1.6;
       margin-bottom: 20px;
-      color: #666;
+      line-height: 1.6;
     }
     .icon {
-      font-size: 64px;
+      font-size: 60px;
       margin-bottom: 20px;
     }
     .button {
-      background-color: #4f46e5;
+      background-color: #0284c7;
       color: white;
       border: none;
-      padding: 12px 24px;
-      border-radius: 6px;
-      font-weight: 600;
+      padding: 10px 20px;
+      border-radius: 4px;
       cursor: pointer;
+      font-weight: 500;
       transition: background-color 0.2s;
     }
     .button:hover {
-      background-color: #4338ca;
+      background-color: #0369a1;
     }
-    .info {
-      margin-top: 20px;
-      font-size: 14px;
-      color: #888;
+    .cached-content {
+      margin-top: 30px;
+      padding-top: 20px;
+      border-top: 1px solid #eee;
     }
   </style>
 </head>
@@ -63,19 +61,38 @@
   <div class="container">
     <div class="icon">📶</div>
     <h1>You're Offline</h1>
-    <p>Don't worry! NestTask has saved your recent tasks and routines. You can still view your previously loaded content.</p>
-    <p>Some features may be limited until your connection is restored.</p>
-    <button class="button" onclick="window.location.reload()">Try Again</button>
-    <div class="info">
-      <p>If you were previously logged in, you can still access your cached tasks and routines.</p>
+    <p>
+      It looks like you're not connected to the internet right now. 
+      Don't worry though, some of your tasks and data are still available in offline mode.
+    </p>
+    <p>
+      All changes you make while offline will be synchronized when you reconnect.
+    </p>
+    <button class="button" onclick="tryReconnect()">Try Again</button>
+    
+    <div class="cached-content">
+      <h3>Available Offline:</h3>
+      <ul id="available-content">
+        <li>Your recent tasks</li>
+        <li>Your routines</li>
+        <li>Your courses</li>
+      </ul>
     </div>
   </div>
 
   <script>
-    // Check if we're back online
-    window.addEventListener('online', () => {
+    // Try to reconnect
+    function tryReconnect() {
       window.location.reload();
-    });
+    }
+
+    // Check for service worker support
+    if ('serviceWorker' in navigator) {
+      // If service worker already controls the page, show additional offline options
+      if (navigator.serviceWorker.controller) {
+        console.log('Service worker is active, offline content available');
+      }
+    }
   </script>
 </body>
 </html>

@@ -21,14 +21,24 @@ import { useOfflineStatus } from './hooks/useOfflineStatus';
 import { usePredictivePreload } from './hooks/usePredictivePreload';
 import { InstantTransition } from './components/InstantTransition';
 import { prefetchResources } from './utils/prefetch';
-import { STORES } from './utils/offlineStorage';
+import { STORES, CRITICAL_STORES, clearIndexedDBStore } from './utils/offlineStorage';
 import type { NavPage } from './types/navigation';
 import type { TaskCategory } from './types/task';
 import type { Task } from './types/task';
 import type { User } from './types/user';
 import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import { supabase } from './lib/supabase';
-import { preloadPredictedRoutes } from './utils/routePreloader';
+import { preloadPredictedRoutes, preloadRoute, ROUTES } from './utils/routePreloader';
+import { requestPersistentStorage, checkStorageSpace } from './utils/offlineStorage';
+import { registerServiceWorker, keepServiceWorkerAlive, handleConnectivityChange } from './utils/serviceWorker';
+import { ServiceWorkerUpdateNotification } from './components/ui/ServiceWorkerUpdateNotification';
+
+// Declare global type extension for Window
+declare global {
+  interface Window {
+    syncCoursesOfflineChanges?: () => Promise<boolean>;
+  }
+}
 
 // Page import functions for prefetching
 const importAdminDashboard = () => import('./pages/AdminDashboard').then(module => ({ default: module.AdminDashboard }));
@@ -93,9 +103,42 @@ export default function App() {
   // Preload resources for predicted pages
   useEffect(() => {
     if (predictedPages.length > 0) {
-      preloadPredictedRoutes(predictedPages);
+      // Convert page names to route paths
+      const routesToPreload = predictedPages.map(page => {
+        switch (page) {
+          case 'home': return ROUTES.HOME;
+          case 'upcoming': return ROUTES.TASKS;
+          case 'search': return ROUTES.TASKS;
+          case 'notifications': return ROUTES.NOTIFICATIONS;
+          case 'courses': return ROUTES.COURSES;
+          case 'study-materials': return ROUTES.COURSES;
+          case 'routine': return ROUTES.ROUTINES;
+          default: return ROUTES.HOME;
+        }
+      });
+      
+      // Preload the routes
+      preloadPredictedRoutes(routesToPreload);
     }
   }, [predictedPages]);
+
+  // Preload the current page's assets when page changes
+  useEffect(() => {
+    let routePath = ROUTES.HOME;
+    
+    switch (activePage) {
+      case 'home': routePath = ROUTES.HOME; break;
+      case 'upcoming': routePath = ROUTES.TASKS; break;
+      case 'search': routePath = ROUTES.TASKS; break;
+      case 'notifications': routePath = ROUTES.NOTIFICATIONS; break;
+      case 'courses': routePath = ROUTES.COURSES; break;
+      case 'study-materials': routePath = ROUTES.COURSES; break;
+      case 'routine': routePath = ROUTES.ROUTINES; break;
+    }
+    
+    // Preload the current route
+    preloadRoute(routePath);
+  }, [activePage]);
 
   // Calculate today's task count - always compute this value regardless of rendering path
   const todayTaskCount = useMemo(() => {
@@ -187,27 +230,49 @@ export default function App() {
   // Handle syncing all offline changes when coming back online
   const syncAllOfflineChanges = async () => {
     try {
-      let tasksSuccess = true;
-      let routinesSuccess = true;
+      console.log('Syncing offline changes for critical data...');
       
-      // Sync tasks with error handling
-      try {
-        await syncOfflineChanges();
-      } catch (err) {
-        tasksSuccess = false;
-      }
+      // First, prioritize critical data types
+      let tasksSuccess = await syncOfflineChanges().catch(() => false);
+      let routinesSuccess = await syncRoutineChanges().catch(() => false);
       
-      // Sync routines with error handling
-      try {
-        await syncRoutineChanges();
-      } catch (err) {
-        routinesSuccess = false;
+      // Only try to sync courses if we have that hook available
+      let coursesSuccess = true;
+      if (typeof window.syncCoursesOfflineChanges === 'function') {
+        coursesSuccess = await window.syncCoursesOfflineChanges().catch(() => false);
       }
       
       // Refresh data regardless of sync outcome to ensure UI is updated
       refreshTasks();
+      
+      return tasksSuccess && routinesSuccess && coursesSuccess;
     } catch (error) {
       console.error('Error in sync process:', error);
+      return false;
+    }
+  };
+  
+  // Function to clear non-critical data if storage is low
+  const clearNonCriticalData = async () => {
+    try {
+      console.log('Clearing non-critical data to free up space...');
+      
+      // Get all store names from STORES
+      const allStores = Object.values(STORES);
+      
+      // Filter to get only non-critical stores
+      const nonCriticalStores = allStores.filter(store => !CRITICAL_STORES.includes(store));
+      
+      // Clear each non-critical store
+      for (const store of nonCriticalStores) {
+        await clearIndexedDBStore(store);
+      }
+      
+      console.log('Non-critical data cleared successfully');
+      return true;
+    } catch (error) {
+      console.error('Error clearing non-critical data:', error);
+      return false;
     }
   };
 
@@ -410,6 +475,48 @@ export default function App() {
     }
   };
 
+  useEffect(() => {
+    // Initialize offline storage features
+    const initOfflineStorage = async () => {
+      try {
+        // Request persistent storage
+        const isPersisted = await requestPersistentStorage();
+        
+        // Check available storage space
+        const storageInfo = await checkStorageSpace();
+        if (storageInfo) {
+          console.log('Storage space info:', storageInfo);
+          
+          // If storage space is low (less than 100MB), take action
+          if (storageInfo.availableSpace < 100 * 1024 * 1024) {
+            console.warn('Low storage space available:', storageInfo.availableSpace / (1024 * 1024), 'MB');
+            
+            // Clear non-critical data to free up space
+            await clearNonCriticalData();
+            
+            // Check storage space again after clearing
+            const updatedStorageInfo = await checkStorageSpace();
+            console.log('Updated storage space after clearing non-critical data:', updatedStorageInfo);
+          }
+        }
+        
+        // Register service worker
+        const registration = await registerServiceWorker();
+        if (registration) {
+          // Keep service worker alive
+          keepServiceWorkerAlive(registration);
+          
+          // Handle connectivity changes
+          handleConnectivityChange(registration);
+        }
+      } catch (error) {
+        console.error('Error initializing offline storage:', error);
+      }
+    };
+    
+    initOfflineStorage();
+  }, []);
+
   // Early returns based on loading state and authentication
   if (isLoading || authLoading || (user?.role === 'admin' && usersLoading)) {
     return <LoadingScreen minimumLoadTime={300} />;
@@ -508,6 +615,7 @@ export default function App() {
       <OfflineIndicator />
       <OfflineToast />
       <OfflineSyncManager onSync={syncAllOfflineChanges} />
+      <ServiceWorkerUpdateNotification />
     </div>
   );
 }

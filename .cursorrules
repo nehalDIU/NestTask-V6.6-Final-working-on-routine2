@@ -113,59 +113,81 @@ If needed, you can further use the `web_scraper.py` file to scrape the web page 
 - When handling deletion operations, always update local cache/state immediately even if the backend operation fails
 - Use error boundaries in UI components to prevent entire application crashes from localized errors
 - Admin dashboard doesn't need caching or saving to IndexedDB - fetch fresh data each time to ensure admins always see the latest information
+- When using workbox-window for PWA development, import it from "workbox-window" package
+- Use type assertion with (registration as any).sync.register for TypeScript when working with SyncManager API
+- Create comprehensive offline IndexedDB storage with sync queue for resilient PWA functionality
+- Implement stale-while-revalidate caching strategy for API responses while using CacheFirst for static assets
+- Add preconnect and prefetch for critical resources to improve initial loading times
+- Use requestIdleCallback for non-critical tasks to avoid blocking the main thread during app startup
+- For image optimization, check for WebP support before conversion to maintain browser compatibility
+- Create lazy loading components with IntersectionObserver and build in native loading='lazy' fallback
+- Implement ServiceWorkerUpdateNotification component with custom animations for better UX
+- Use Workbox's built-in expiration plugin to prevent cache from growing too large
+- Ensure proper cleanup of resources and event listeners in React useEffect hooks
+- Create a central app initialization utility that handles all performance optimizations in the correct order
 
 # Scratchpad
 
-Task: Enhance the Teacher Management functionality to make it more professional
+Task: Optimize Service Worker and Caching for PWA
 
-[X] Analyze the current Teacher Management implementation to identify areas for improvement
-[X] Enhance TeacherManager component
-  [X] Add statistical dashboard showing teacher count, departments, etc.
-  [X] Add filtering and sorting options
-  [X] Add department distribution visualization chart
-  [X] Implement course assignment statistics
-  [X] Add advanced search functionality
-  [X] Add export functionality (CSV and printable reports)
-  [X] Improve overall UI with professional styling
-[X] Improve TeacherForm component
-  [X] Add form validation for required fields and proper formatting
-  [X] Make the form collapsible for better space management
-  [X] Improve UI styling and user feedback
-  [X] Implement modern course selection dropdown with search
-[X] Enhance TeacherList component
-  [X] Implement pagination for better handling of large teacher lists
-  [X] Add better search functionality with clear button
-  [X] Add confirmation dialog for teacher deletion
-[X] Upgrade TeacherEditModal component
-  [X] Add validation for form fields
-  [X] Create a more intuitive course selection interface with search functionality
-  [X] Add better styling and user feedback during form submission
-[X] Implement Bulk Teacher Import functionality
-  [X] Create BulkTeacherImport component with JSON file upload
-  [X] Add validation for JSON structure and teacher data
-  [X] Implement preview of teachers to be imported
-  [X] Add error handling and success reporting
-  [X] Integrate with TeacherManager component
-[X] Fix teacher deletion functionality
-  [X] Update deleteTeacher function to handle foreign key relationships
-  [X] Add proper error handling during deletion
-  [X] Implement toast notifications for user feedback
-  [X] Fix z-index issues for delete confirmation modal
+[X] Analyze current implementation
+[X] Implement Workbox for better service worker management
+  [X] Add workbox-window integration in pwa.ts
+  [X] Update service-worker.js with Workbox caching strategies
+  [X] Create workbox-config.js for advanced caching configuration
+[X] Implement proper caching strategies
+  [X] CacheFirst for static assets and fonts
+  [X] NetworkFirst for HTML pages
+  [X] StaleWhileRevalidate for API endpoints
+[X] Enhance image loading
+  [X] Create image optimization utilities
+  [X] Add WebP conversion for modern browsers
+  [X] Implement lazy loading with IntersectionObserver
+  [X] Create an OptimizedImage React component
+[X] Improve offline capabilities
+  [X] Implement comprehensive IndexedDB utilities
+  [X] Create background sync for offline data updates
+  [X] Add offline fallback page
+[X] Optimize application initialization
+  [X] Create centralized app initializer
+  [X] Add preconnect and prefetch optimizations
+  [X] Implement performance monitoring
+[X] Update Vite configuration
+  [X] Enhance PWA plugin settings
+  [X] Add compression and HTTP/3 settings
+[X] Create notification for service worker updates
+  [X] Implement ServiceWorkerUpdateNotification component
 
-Key improvements completed:
-- Fixed type errors between component interfaces and hook implementations
-- Added a professional statistics dashboard with department visualizations
-- Implemented comprehensive filtering, sorting and advanced search options
-- Added bulk import functionality for efficient teacher data management
-- Improved UX with pagination, confirmations, and responsive design 
-- Enhanced form validation and error handling throughout
-- Implemented modern course selection interface with search and dropdown
-- Added data export features (CSV download and printable reports)
-- Improved UI with more professional styling and intuitive interactions
-- Fixed teacher deletion functionality by properly handling database relationships
-- Added a robust toast notification system for better user feedback throughout the application
-- Improved error handling and user feedback during all CRUD operations
+Key improvements implemented:
+1. **Service Worker Optimization**:
+   - Replaced manual service worker with Workbox for improved caching
+   - Implemented stale-while-revalidate for API calls
+   - Added CacheFirst for static assets, fonts, and images
+   - Created proper versioning for cache invalidation
 
-The Teacher Management system now offers administrators a professional, efficient interface for managing teacher data with powerful data analysis capabilities and export options.
+2. **Offline Capabilities**:
+   - Added comprehensive IndexedDB implementation
+   - Created background sync queue for offline operations
+   - Improved offline page with better UX
+   - Added automatic sync when back online
+
+3. **Image Optimization**:
+   - Implemented WebP conversion for supported browsers
+   - Created responsive image loading with srcSet
+   - Added lazy loading with IntersectionObserver
+   - Created blur-up technique for smoother loading
+
+4. **Bundle Optimization**:
+   - Added HTTP/2 and compression headers
+   - Improved chunk splitting in Vite config
+   - Added preloading and prefetching of critical resources
+   - Implemented requestIdleCallback for non-critical tasks
+
+5. **Performance Monitoring**:
+   - Added Core Web Vitals tracking
+   - Implemented performance marks and measures
+   - Created debug logging for optimization timing
+
+The application now loads significantly faster, works better offline, and provides a more app-like experience with smoother transitions and optimized resource loading.
 
 Task completed ✅

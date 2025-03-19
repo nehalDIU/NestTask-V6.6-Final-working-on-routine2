@@ -31,7 +31,7 @@ import { supabase } from './lib/supabase';
 import { preloadPredictedRoutes, preloadRoute, ROUTES } from './utils/routePreloader';
 import { requestPersistentStorage, checkStorageSpace } from './utils/offlineStorage';
 import { registerServiceWorker, keepServiceWorkerAlive, handleConnectivityChange } from './utils/serviceWorker';
-import { ServiceWorkerUpdateNotification } from './components/ui/ServiceWorkerUpdateNotification';
+import ServiceWorkerUpdateNotification from './components/ui/ServiceWorkerUpdateNotification';
 
 // Declare global type extension for Window
 declare global {

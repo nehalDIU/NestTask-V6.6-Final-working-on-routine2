@@ -1,46 +1,55 @@
-const CACHE_NAME = 'nesttask-v2';
+importScripts('https://storage.googleapis.com/workbox-cdn/releases/6.5.4/workbox-sw.js');
+
+// Define cache names
+const CACHE_VERSION = 'v3';
+const CACHE_NAMES = {
+  static: `static-assets-${CACHE_VERSION}`,
+  documents: `document-pages-${CACHE_VERSION}`,
+  images: `images-${CACHE_VERSION}`,
+  fonts: `fonts-${CACHE_VERSION}`,
+  api: `api-cache-${CACHE_VERSION}`
+};
+
 const OFFLINE_URL = '/offline.html';
 
-// Assets to cache on install
-const STATIC_ASSETS = [
-  '/',
-  '/index.html',
-  '/offline.html',
-  '/manifest.json',
-  '/icons/icon-192x192.png',
-  '/icons/icon-512x512.png',
-  '/icons/add-task.png',
-  '/icons/view-tasks.png',
-  // Cache additional assets for UI
-  '/icons/badge.png'
-];
+// Use Workbox for efficient caching
+workbox.setConfig({ debug: false });
 
-// Dynamic assets that should be cached during runtime
-const RUNTIME_CACHE_PATTERNS = [
-  /\.(js|css)$/, // JS and CSS files
-  /assets\/.*\.(js|css|woff2|png|jpg|svg)$/, // Vite build assets
-  /\/icons\/.*\.png$/, // Icon images
-  /^https:\/\/fonts\.googleapis\.com/, // Google fonts stylesheets
-  /^https:\/\/fonts\.gstatic\.com/ // Google fonts files
-];
-
-// Install event - cache static assets
+// Cache static assets on install
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(STATIC_ASSETS);
-    })
+    Promise.all([
+      caches.open(CACHE_NAMES.static).then((cache) => {
+        return cache.addAll([
+          '/',
+          '/index.html',
+          '/offline.html',
+          '/manifest.json',
+          '/icons/icon-192x192.png',
+          '/icons/icon-512x512.png',
+          '/icons/add-task.png',
+          '/icons/view-tasks.png',
+          '/icons/badge.png'
+        ]);
+      }),
+      // Precache fallback offline page
+      caches.open(CACHE_NAMES.documents).then(cache => {
+        return cache.add(OFFLINE_URL);
+      })
+    ])
   );
   self.skipWaiting();
 });
 
-// Activate event - clean up old caches
+// Clean up old caches
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames
-          .filter((cacheName) => cacheName !== CACHE_NAME)
+          .filter((cacheName) => {
+            return Object.values(CACHE_NAMES).every(name => cacheName !== name);
+          })
           .map((cacheName) => caches.delete(cacheName))
       );
     })
@@ -48,153 +57,169 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// Helper function to determine if a URL should be cached at runtime
-function shouldCacheAtRuntime(url) {
-  try {
-    // Skip unsupported URL schemes
-    const urlObj = new URL(url);
-    if (urlObj.protocol === 'chrome-extension:' || 
-        urlObj.protocol === 'chrome:' ||
-        urlObj.protocol === 'edge:' ||
-        urlObj.protocol === 'brave:' ||
-        urlObj.protocol !== 'http:' && urlObj.protocol !== 'https:') {
-      return false;
-    }
-    
-    // Don't cache Supabase API requests
-    if (url.includes('supabase.co')) {
-      return false;
-    }
-    
-    // Check if the URL matches any of our patterns
-    return RUNTIME_CACHE_PATTERNS.some(pattern => pattern.test(url));
-  } catch (error) {
-    console.error('Error checking URL for caching:', error, url);
-    return false;
-  }
-}
+// WORKBOX CACHING STRATEGIES
 
-// Fetch event - stale-while-revalidate strategy for assets, network-first for API
-self.addEventListener('fetch', (event) => {
-  // Handle non-GET requests
-  if (event.request.method !== 'GET') return;
+// 1. Static assets - CacheFirst strategy (long-term caching)
+workbox.routing.registerRoute(
+  ({ request }) => request.destination === 'style' || 
+                  request.destination === 'script' || 
+                  request.destination === 'worker',
+  new workbox.strategies.CacheFirst({
+    cacheName: CACHE_NAMES.static,
+    plugins: [
+      new workbox.expiration.ExpirationPlugin({
+        maxEntries: 60,
+        maxAgeSeconds: 30 * 24 * 60 * 60, // 30 days
+      }),
+    ],
+  })
+);
 
-  try {
-    const url = new URL(event.request.url);
+// 2. Images - CacheFirst with expiration
+workbox.routing.registerRoute(
+  ({ request }) => request.destination === 'image',
+  new workbox.strategies.CacheFirst({
+    cacheName: CACHE_NAMES.images,
+    plugins: [
+      new workbox.expiration.ExpirationPlugin({
+        maxEntries: 60,
+        maxAgeSeconds: 7 * 24 * 60 * 60, // 7 days
+      }),
+    ],
+  })
+);
 
-    // Skip unsupported URL schemes
-    if (url.protocol === 'chrome-extension:' || 
-        url.protocol === 'chrome:' ||
-        url.protocol === 'edge:' ||
-        url.protocol === 'brave:' ||
-        url.protocol !== 'http:' && url.protocol !== 'https:') {
-      return;
-    }
+// 3. Fonts - CacheFirst (rarely change)
+workbox.routing.registerRoute(
+  ({ url }) => url.origin === 'https://fonts.googleapis.com' || 
+               url.origin === 'https://fonts.gstatic.com',
+  new workbox.strategies.CacheFirst({
+    cacheName: CACHE_NAMES.fonts,
+    plugins: [
+      new workbox.expiration.ExpirationPlugin({
+        maxEntries: 30,
+        maxAgeSeconds: 60 * 24 * 60 * 60, // 60 days
+      }),
+    ],
+  })
+);
 
-    // Skip Supabase API requests (let them go to network)
+// 4. HTML pages - NetworkFirst strategy (always serve latest, fallback to cache)
+workbox.routing.registerRoute(
+  ({ request }) => request.mode === 'navigate',
+  new workbox.strategies.NetworkFirst({
+    cacheName: CACHE_NAMES.documents,
+    plugins: [
+      new workbox.expiration.ExpirationPlugin({
+        maxEntries: 10,
+        maxAgeSeconds: 24 * 60 * 60, // 24 hours
+      }),
+    ],
+    networkTimeoutSeconds: 3,
+  })
+);
+
+// 5. API endpoints - StaleWhileRevalidate (quick response, update in background)
+workbox.routing.registerRoute(
+  ({ url }) => {
+    // Exclude Supabase direct API calls
     if (url.hostname.includes('supabase.co')) {
-      return;
+      return false;
     }
+    // Match app API calls pattern
+    return url.pathname.startsWith('/api/');
+  },
+  new workbox.strategies.StaleWhileRevalidate({
+    cacheName: CACHE_NAMES.api,
+    plugins: [
+      new workbox.expiration.ExpirationPlugin({
+        maxEntries: 50,
+        maxAgeSeconds: 5 * 60, // 5 minutes
+      }),
+    ],
+  })
+);
 
-    // Check for module scripts
-    const isModuleScript = event.request.destination === 'script' && 
-                           (url.pathname.endsWith('.mjs') || url.pathname.includes('assets/'));
+// Fallback page for navigation requests that fail
+workbox.routing.setCatchHandler(async ({ event }) => {
+  if (event.request.mode === 'navigate') {
+    return caches.match(OFFLINE_URL);
+  }
+  return Response.error();
+});
+
+// ADDITIONAL SERVICE WORKER FEATURES
+
+// Background sync for offline operations
+self.addEventListener('sync', (event) => {
+  if (event.tag.startsWith('sync-')) {
+    const syncKey = event.tag.replace('sync-', '');
     
-    // For module scripts, ensure proper handling
-    if (isModuleScript) {
-      event.respondWith(
-        fetch(event.request)
-          .then(response => {
-            if (response.ok) {
-              // Only cache if response is valid
-              const responseClone = response.clone();
-              safeCachePut(CACHE_NAME, event.request, responseClone);
+    event.waitUntil(
+      (async () => {
+        try {
+          // Retrieve the data from IndexedDB
+          const db = await openDB('pwa-app-db', 1, {
+            upgrade(db) {
+              if (!db.objectStoreNames.contains('sync-tasks')) {
+                db.createObjectStore('sync-tasks', { keyPath: 'id' });
+              }
             }
-            return response;
-          })
-          .catch(async () => {
-            // Fallback to cache
-            const cachedResponse = await safeCacheMatch(CACHE_NAME, event.request);
-            return cachedResponse || new Response('Module not available', { status: 404 });
-          })
-      );
-      return;
-    }
-
-    // Navigation requests (HTML pages) - network first
-    if (event.request.mode === 'navigate') {
-      event.respondWith(
-        fetch(event.request)
-          .then(response => {
-            // Cache the latest version
-            const responseClone = response.clone();
-            safeCachePut(CACHE_NAME, event.request, responseClone);
-            return response;
-          })
-          .catch(async () => {
-            // Offline fallback
-            const cachedResponse = await safeCacheMatch(CACHE_NAME, event.request);
-            if (cachedResponse) return cachedResponse;
-            
-            // If no cached version, show offline page
-            return safeCacheMatch(CACHE_NAME, OFFLINE_URL);
-          })
-      );
-      return;
-    }
-
-    // For runtime-cacheable assets (JS, CSS, images) - stale-while-revalidate
-    if (shouldCacheAtRuntime(event.request.url)) {
-      event.respondWith(
-        (async () => {
-          // Try to get from cache first
-          const cachedResponse = await safeCacheMatch(CACHE_NAME, event.request);
+          });
           
-          // Fetch from network in background
-          const fetchPromise = fetch(event.request)
-            .then(networkResponse => {
-              // Cache the new version
-              safeCachePut(CACHE_NAME, event.request, networkResponse.clone());
-              return networkResponse;
-            })
-            .catch(() => {
-              // If fetch fails, return cached or null
-              return cachedResponse || null;
+          // Get pending operations
+          const syncData = await db.get('sync-tasks', syncKey);
+          
+          if (syncData) {
+            // Process the sync operation
+            const { url, method, headers, body } = syncData.data;
+            
+            // Attempt to send the request
+            const response = await fetch(url, {
+              method: method || 'POST',
+              headers: headers || {},
+              body: body ? JSON.stringify(body) : undefined,
             });
             
-          // Return cached response immediately, or wait for network
-          return cachedResponse || fetchPromise;
-        })()
-      );
-      return;
-    }
-
-    // For all other requests - network first with cache fallback
-    event.respondWith(
-      fetch(event.request)
-        .then(response => {
-          // Cache successful responses that match patterns
-          if (response.ok && shouldCacheAtRuntime(event.request.url)) {
-            const responseClone = response.clone();
-            safeCachePut(CACHE_NAME, event.request, responseClone);
+            if (response.ok) {
+              // Delete the operation if successful
+              await db.delete('sync-tasks', syncKey);
+              
+              // Notify the client
+              self.clients.matchAll().then(clients => {
+                clients.forEach(client => {
+                  client.postMessage({
+                    type: 'BACKGROUND_SYNC_SUCCESS',
+                    payload: {
+                      syncKey,
+                      data: syncData.data,
+                    }
+                  });
+                });
+              });
+            }
           }
-          return response;
-        })
-        .catch(async () => {
-          // Try to get from cache
-          const cachedResponse = await safeCacheMatch(CACHE_NAME, event.request);
-          if (cachedResponse) return cachedResponse;
-
-          // Return error response
-          return new Response('Network error', { status: 408 });
-        })
+        } catch (error) {
+          console.error('Background sync failed:', error);
+        }
+      })()
     );
-  } catch (error) {
-    console.error('Error in fetch handler:', error, event.request.url);
-    // Let the browser handle this request normally
-    return;
   }
 });
+
+// Helper function for IndexedDB
+function openDB(name, version, options) {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(name, version);
+    
+    if (options && options.upgrade) {
+      request.onupgradeneeded = event => options.upgrade(event.target.result);
+    }
+    
+    request.onsuccess = event => resolve(event.target.result);
+    request.onerror = () => reject(request.error);
+  });
+}
 
 // Push notification handler
 self.addEventListener('push', (event) => {
@@ -248,66 +273,36 @@ self.addEventListener('notificationclick', (event) => {
         // Check if there is already a window/tab open with the target URL
         const hadWindowToFocus = windowClients.some((windowClient) => {
           if (windowClient.url === urlToOpen) {
-            // Focus if already open
             windowClient.focus();
+            // Send message to client to navigate to specific task
+            if (taskId) {
+              windowClient.postMessage({
+                type: 'NOTIFICATION_CLICK',
+                taskId: taskId,
+                notificationType: notificationType
+              });
+            }
             return true;
           }
           return false;
         });
 
-        // If no window/tab is already open, open one
+        // If no window/tab to focus, open new one
         if (!hadWindowToFocus) {
-          clients.openWindow(urlToOpen).then((windowClient) => {
-            if (windowClient) {
-              windowClient.focus();
-            }
-          });
-        }
-
-        // Broadcast message to all clients about the notification click
-        if (taskId && notificationType) {
-          windowClients.forEach((client) => {
-            client.postMessage({
-              type: 'NOTIFICATION_CLICKED',
-              payload: {
-                taskId,
-                notificationType
+          return clients.openWindow(urlToOpen)
+            .then((windowClient) => {
+              // Wait a bit for window to load and then send message
+              if (windowClient && taskId) {
+                setTimeout(() => {
+                  windowClient.postMessage({
+                    type: 'NOTIFICATION_CLICK',
+                    taskId: taskId,
+                    notificationType: notificationType
+                  });
+                }, 1000);
               }
             });
-          });
         }
       })
   );
 });
-
-// Add global error handlers
-self.addEventListener('error', (event) => {
-  console.error('Service Worker error:', event.error);
-});
-
-self.addEventListener('unhandledrejection', (event) => {
-  console.error('Service Worker unhandled rejection:', event.reason);
-});
-
-// Add a safe cache helper function
-async function safeCachePut(cacheName, request, response) {
-  try {
-    const cache = await caches.open(cacheName);
-    await cache.put(request, response);
-    return true;
-  } catch (error) {
-    console.error('Safe cache put error:', error, request.url);
-    return false;
-  }
-}
-
-// Add a safe cache match function
-async function safeCacheMatch(cacheName, request) {
-  try {
-    const cache = await caches.open(cacheName);
-    return await cache.match(request);
-  } catch (error) {
-    console.error('Safe cache match error:', error, request.url);
-    return null;
-  }
-}

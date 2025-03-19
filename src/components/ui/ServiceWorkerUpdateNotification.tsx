@@ -1,62 +1,75 @@
-import { useState, useEffect } from 'react';
-import { updateServiceWorker } from '../../utils/serviceWorker';
+import React, { useEffect, useState } from 'react';
 
-export function ServiceWorkerUpdateNotification() {
-  const [showUpdateNotification, setShowUpdateNotification] = useState(false);
+// Add keyframe styles to the component
+const slideUpAnimation = `
+  @keyframes slideUp {
+    from {
+      transform: translateY(100%);
+      opacity: 0;
+    }
+    to {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
+`;
+
+export default function ServiceWorkerUpdateNotification() {
+  const [isUpdateAvailable, setIsUpdateAvailable] = useState(false);
+  const [updateHandler, setUpdateHandler] = useState<(() => void) | null>(null);
 
   useEffect(() => {
-    // Listen for service worker update events
-    const handleUpdateAvailable = () => {
-      setShowUpdateNotification(true);
+    // Add keyframe animation to the document head
+    const styleElement = document.createElement('style');
+    styleElement.textContent = slideUpAnimation;
+    document.head.appendChild(styleElement);
+
+    const handleUpdate = (event: Event) => {
+      const customEvent = event as CustomEvent<{ onUpdate: () => void }>;
+      
+      // Check if update handler is available
+      if (customEvent.detail?.onUpdate) {
+        setIsUpdateAvailable(true);
+        setUpdateHandler(() => customEvent.detail.onUpdate);
+      } else {
+        setIsUpdateAvailable(true);
+        setUpdateHandler(() => () => window.location.reload());
+      }
     };
 
-    window.addEventListener('serviceWorkerUpdateAvailable', handleUpdateAvailable);
+    // Listen for service worker update events
+    window.addEventListener('sw-update-available', handleUpdate);
 
     return () => {
-      window.removeEventListener('serviceWorkerUpdateAvailable', handleUpdateAvailable);
+      window.removeEventListener('sw-update-available', handleUpdate);
+      // Remove the style element on unmount
+      document.head.removeChild(styleElement);
     };
   }, []);
 
-  const handleUpdate = async () => {
-    // Get all service worker registrations
-    const registrations = await navigator.serviceWorker.getRegistrations();
-    
-    // Find registration with a waiting worker
-    const registration = registrations.find(reg => reg.waiting);
-    
-    if (registration) {
-      // Update the service worker
-      updateServiceWorker(registration);
-      
-      // Hide the notification
-      setShowUpdateNotification(false);
-      
-      // Reload after a short delay to ensure the new service worker is activated
-      setTimeout(() => {
-        window.location.reload();
-      }, 1000);
-    }
-  };
-
-  if (!showUpdateNotification) {
-    return null;
-  }
+  if (!isUpdateAvailable) return null;
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 p-4 bg-blue-600 text-white text-center z-50 flex justify-between items-center">
-      <div className="flex-1">
-        New version available! Update for improved performance and features.
+    <div 
+      className="fixed bottom-4 right-4 bg-blue-500 text-white rounded-lg shadow-lg p-4 z-50 flex items-center justify-between max-w-md"
+      style={{
+        animation: 'slideUp 0.3s ease-out',
+      }}
+    >
+      <div className="mr-4">
+        <p className="font-medium">New version available!</p>
+        <p className="text-sm opacity-90">Refresh to update the application</p>
       </div>
       <div className="flex space-x-2">
         <button 
-          onClick={handleUpdate}
-          className="bg-white text-blue-600 px-4 py-2 rounded font-medium hover:bg-blue-50 transition-colors"
+          className="bg-white text-blue-500 px-3 py-1 rounded-md font-medium hover:bg-blue-50 transition-colors"
+          onClick={() => updateHandler && updateHandler()}
         >
-          Update Now
+          Update
         </button>
         <button 
-          onClick={() => setShowUpdateNotification(false)}
-          className="text-white/80 hover:text-white px-4 py-2 rounded font-medium transition-colors"
+          className="text-white hover:text-blue-100 transition-colors"
+          onClick={() => setIsUpdateAvailable(false)}
         >
           Later
         </button>

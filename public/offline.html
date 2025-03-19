@@ -3,95 +3,189 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>NestTask - Offline</title>
+  <title>You are offline | NestTask</title>
+  <link rel="icon" href="/favicon.ico">
+  <meta name="theme-color" content="#0284c7">
   <style>
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
-      background-color: #f5f7fb;
-      color: #333;
+    :root {
+      --blue-500: #0284c7;
+      --blue-600: #0369a1;
+      --slate-50: #f8fafc;
+      --slate-100: #f1f5f9;
+      --slate-200: #e2e8f0;
+      --slate-700: #334155;
+      --slate-800: #1e293b;
+      --slate-900: #0f172a;
+    }
+    
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    
+    html, body {
+      height: 100%;
+      background-color: var(--slate-50);
+      color: var(--slate-800);
+    }
+    
+    .container {
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      height: 100vh;
-      margin: 0;
-      padding: 20px;
+      min-height: 100%;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 1rem;
       text-align: center;
     }
-    .container {
-      max-width: 500px;
-      background-color: white;
-      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-      border-radius: 8px;
-      padding: 30px;
+    
+    .logo {
+      width: 120px;
+      height: 120px;
+      margin-bottom: 2rem;
+      animation: pulse 2s infinite ease-in-out;
     }
+    
     h1 {
-      color: #0284c7;
-      margin-bottom: 10px;
+      font-size: 2rem;
+      margin-bottom: 1rem;
+      color: var(--slate-900);
     }
+    
     p {
-      margin-bottom: 20px;
+      font-size: 1.1rem;
       line-height: 1.6;
+      margin-bottom: 1.5rem;
+      color: var(--slate-700);
     }
-    .icon {
-      font-size: 60px;
-      margin-bottom: 20px;
-    }
-    .button {
-      background-color: #0284c7;
+    
+    .btn {
+      display: inline-block;
+      background-color: var(--blue-500);
       color: white;
-      border: none;
-      padding: 10px 20px;
-      border-radius: 4px;
+      font-weight: 600;
+      padding: 0.75rem 1.5rem;
+      border-radius: 0.375rem;
+      text-decoration: none;
+      transition: background-color 0.3s ease;
+      margin-top: 1rem;
       cursor: pointer;
-      font-weight: 500;
-      transition: background-color 0.2s;
+      border: none;
+      outline: none;
     }
-    .button:hover {
-      background-color: #0369a1;
+    
+    .btn:hover {
+      background-color: var(--blue-600);
     }
-    .cached-content {
-      margin-top: 30px;
-      padding-top: 20px;
-      border-top: 1px solid #eee;
+    
+    .tips {
+      margin-top: 3rem;
+      padding: 1.25rem;
+      background-color: var(--slate-100);
+      border-radius: 0.5rem;
+      border: 1px solid var(--slate-200);
+      text-align: left;
+    }
+    
+    .tips h2 {
+      font-size: 1.25rem;
+      margin-bottom: 1rem;
+      color: var(--slate-900);
+    }
+    
+    .tips ul {
+      padding-left: 1.5rem;
+    }
+    
+    .tips li {
+      margin-bottom: 0.75rem;
+    }
+    
+    .notification {
+      margin-top: 2rem;
+      padding: 1rem;
+      font-size: 0.9rem;
+      color: var(--slate-700);
+    }
+    
+    @keyframes pulse {
+      0% {
+        transform: scale(1);
+      }
+      50% {
+        transform: scale(1.05);
+      }
+      100% {
+        transform: scale(1);
+      }
+    }
+    
+    @media (max-width: 600px) {
+      .container {
+        padding: 1.5rem;
+      }
+      
+      h1 {
+        font-size: 1.75rem;
+      }
+      
+      p {
+        font-size: 1rem;
+      }
+      
+      .logo {
+        width: 100px;
+        height: 100px;
+      }
     }
   </style>
 </head>
 <body>
   <div class="container">
-    <div class="icon">📶</div>
-    <h1>You're Offline</h1>
-    <p>
-      It looks like you're not connected to the internet right now. 
-      Don't worry though, some of your tasks and data are still available in offline mode.
-    </p>
-    <p>
-      All changes you make while offline will be synchronized when you reconnect.
-    </p>
-    <button class="button" onclick="tryReconnect()">Try Again</button>
+    <img class="logo" src="/icons/icon-512x512.png" alt="NestTask Logo">
+    <h1>You're offline right now</h1>
+    <p>It looks like you've lost your internet connection. NestTask requires an internet connection to work properly.</p>
+    <p>Don't worry - any changes you've made while online are safely stored and will sync as soon as you're back online.</p>
     
-    <div class="cached-content">
-      <h3>Available Offline:</h3>
-      <ul id="available-content">
-        <li>Your recent tasks</li>
-        <li>Your routines</li>
-        <li>Your courses</li>
+    <button class="btn" id="retry-button">Try Again</button>
+    
+    <div class="tips">
+      <h2>Offline Tips:</h2>
+      <ul>
+        <li>Check your internet connection and try again</li>
+        <li>Some features of NestTask may work offline once you've used them while online</li>
+        <li>Once back online, your data will automatically sync</li>
+        <li>To use NestTask fully offline, make sure to install it as a PWA on your device</li>
       </ul>
     </div>
+    
+    <div class="notification">
+      <p>NestTask will automatically notify you when you're back online.</p>
+    </div>
   </div>
-
+  
   <script>
-    // Try to reconnect
-    function tryReconnect() {
+    // Check if we're back online
+    window.addEventListener('online', () => {
       window.location.reload();
-    }
-
-    // Check for service worker support
+    });
+    
+    // Try again button
+    document.getElementById('retry-button').addEventListener('click', () => {
+      window.location.reload();
+    });
+    
+    // Listen for service worker messages
     if ('serviceWorker' in navigator) {
-      // If service worker already controls the page, show additional offline options
-      if (navigator.serviceWorker.controller) {
-        console.log('Service worker is active, offline content available');
-      }
+      navigator.serviceWorker.addEventListener('message', (event) => {
+        if (event.data && event.data.type === 'ONLINE_STATUS_CHANGE' && event.data.online) {
+          window.location.reload();
+        }
+      });
     }
   </script>
 </body>

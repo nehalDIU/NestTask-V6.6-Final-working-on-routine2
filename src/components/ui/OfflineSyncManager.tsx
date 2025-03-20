@@ -1,75 +1,71 @@
-import { useEffect, useState } from 'react';
-import { useOfflineStatus } from '../../hooks/useOfflineStatus';
+import { useState } from 'react';
 import { Wifi, RefreshCw } from 'lucide-react';
 
 interface OfflineSyncManagerProps {
-  onSync: () => Promise<void>;
+  isSyncing?: boolean;
+  onSync?: () => Promise<void>;
+  isOffline?: boolean;
 }
 
-export function OfflineSyncManager({ onSync }: OfflineSyncManagerProps) {
-  const isOffline = useOfflineStatus();
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [wasOffline, setWasOffline] = useState(false);
-  const [showSyncPrompt, setShowSyncPrompt] = useState(false);
-
-  // Track offline status changes
-  useEffect(() => {
-    if (isOffline) {
-      setWasOffline(true);
-    } else if (wasOffline) {
-      // We were offline but now we're online
-      setShowSyncPrompt(true);
-    }
-  }, [isOffline, wasOffline]);
-
-  // Handle sync action
+export function OfflineSyncManager({ 
+  isSyncing = false, 
+  onSync, 
+  isOffline = false 
+}: OfflineSyncManagerProps) {
+  const [isManualRefreshing, setIsManualRefreshing] = useState(false);
+  
   const handleSync = async () => {
-    if (isSyncing) return;
-    
-    setIsSyncing(true);
-    try {
+    if (onSync && !isSyncing) {
       await onSync();
-      setShowSyncPrompt(false);
-      setWasOffline(false);
-    } catch (error) {
-      console.error('Error syncing offline data:', error);
-    } finally {
-      setIsSyncing(false);
     }
   };
-
-  if (!showSyncPrompt) return null;
-
+  
+  // Force a page refresh
+  const handleForceRefresh = () => {
+    setIsManualRefreshing(true);
+    // Add a small delay to show the loading state before refresh
+    setTimeout(() => {
+      window.location.reload();
+    }, 300);
+  };
+  
   return (
-    <div className="fixed bottom-24 left-1/2 transform -translate-x-1/2 z-50 
-                    bg-white dark:bg-gray-800 shadow-lg rounded-lg p-4 
-                    flex items-center gap-3 animate-slide-up">
-      <div className="flex-shrink-0 text-green-500">
-        <Wifi className="h-5 w-5" />
-      </div>
-      <div className="flex-1">
-        <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
-          You're back online! Sync your changes?
-        </p>
-      </div>
-      <button
-        onClick={handleSync}
-        disabled={isSyncing}
-        className="flex items-center gap-1 bg-indigo-600 hover:bg-indigo-700 
-                   text-white px-3 py-1 rounded-md text-sm font-medium
-                   disabled:opacity-50 disabled:cursor-not-allowed"
-      >
-        {isSyncing ? (
-          <>
+    <div className="flex flex-col gap-2">
+      {isOffline ? (
+        <button
+          disabled
+          className="flex items-center justify-center gap-2 text-gray-500 bg-gray-100 dark:bg-gray-800 dark:text-gray-400 text-sm px-3 py-1.5 rounded-md"
+        >
+          <Wifi className="h-4 w-4" />
+          <span>Offline Mode</span>
+        </button>
+      ) : (
+        <button
+          onClick={handleSync}
+          disabled={isSyncing}
+          className="flex items-center justify-center gap-2 text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 text-sm px-3 py-1.5 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900/50 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {isSyncing ? (
             <RefreshCw className="h-4 w-4 animate-spin" />
-            Syncing...
-          </>
-        ) : (
-          <>
+          ) : (
             <RefreshCw className="h-4 w-4" />
-            Sync
-          </>
+          )}
+          <span>{isSyncing ? 'Syncing...' : 'Sync Now'}</span>
+        </button>
+      )}
+      
+      {/* Manual Refresh Button */}
+      <button
+        onClick={handleForceRefresh}
+        disabled={isManualRefreshing}
+        className="flex items-center justify-center gap-2 text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/30 text-sm px-3 py-1.5 rounded-md hover:bg-green-100 dark:hover:bg-green-900/50 disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        {isManualRefreshing ? (
+          <RefreshCw className="h-4 w-4 animate-spin" />
+        ) : (
+          <RefreshCw className="h-4 w-4" />
         )}
+        <span>{isManualRefreshing ? 'Refreshing...' : 'Manual Refresh'}</span>
       </button>
     </div>
   );

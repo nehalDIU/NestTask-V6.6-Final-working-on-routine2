@@ -601,7 +601,6 @@ export default function App() {
         user={{
           name: user.name,
           email: user.email,
-          avatar: user.avatar || '' // Provide a default value
         }}
         taskStats={taskStats}
         tasks={tasks}
@@ -650,10 +649,16 @@ export default function App() {
       <InstallPWA />
       <OfflineIndicator />
       <OfflineToast />
-      <OfflineSyncManager 
-        isOffline={isOffline} 
-        onSync={syncAllOfflineChanges} 
-      />
+      <div className="fixed bottom-24 right-4 z-50">
+        <OfflineSyncManager
+          isOffline={isOffline}
+          isSyncing={false}
+          onSync={async () => {
+            await syncAllOfflineChanges();
+            return;
+          }}
+        />
+      </div>
       <ServiceWorkerUpdateNotification position="bottom" />
     </div>
   );

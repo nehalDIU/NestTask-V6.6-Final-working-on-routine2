@@ -1,4 +1,19 @@
-export type TaskCategory = 'presentation' | 'project' | 'assignment' | 'quiz' | 'lab-report' | 'lab-final' | 'lab-performance' | 'documents' | 'blc' | 'groups' | 'task' | 'others';
+export type TaskCategory = 
+  | 'presentation' 
+  | 'assignment' 
+  | 'quiz' 
+  | 'lab-report' 
+  | 'lab-final' 
+  | 'lab-performance'
+  | 'task' 
+  | 'documents'
+  | 'blc'
+  | 'groups'
+  | 'project'
+  | 'midterm'
+  | 'final-exam'
+  | 'others' 
+  | 'all';
 
 export interface Task {
   id: string;

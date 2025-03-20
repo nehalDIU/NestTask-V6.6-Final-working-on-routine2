@@ -1,4 +1,4 @@
-import { Task } from '../types';
+import { Task } from '../types/task';
 import { 
   Crown, 
   Calendar, 
@@ -295,14 +295,10 @@ export function TaskList({ tasks, onDeleteTask, showDeleteButton = false }: Task
         </div>
       </div>
 
-      {/* Mobile-optimized modal */}
       {selectedTask && (
         <TaskDetailsPopup
           task={selectedTask}
-          tasks={sortedTasks}
           onClose={() => setSelectedTask(null)}
-          onDelete={onDeleteTask}
-          showDeleteButton={showDeleteButton}
         />
       )}
     </div>

@@ -237,27 +237,42 @@ window.addEventListener('load', () => {
       loadingScreen.remove();
     }
     
+    // Initialize PWA features and enhancements when app is fully loaded
+    Promise.all([
+      import('./utils/pwa').then(({ initPWA }) => initPWA()),
+      import('./utils/pwaEnhancements').then(({ initPWAEnhancements }) => initPWAEnhancements())
+    ]).then(([pwaResult, enhancementsResult]) => {
+      if (pwaResult && enhancementsResult) {
+        console.log('PWA features and enhancements initialized successfully');
+      }
+    });
+    
     // Register service worker update listener after app is ready
     if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
       window.addEventListener('sw-update-available', (event) => {
         console.log('Service worker update available!');
-        // Show update notification after a delay
-        setTimeout(() => {
-          // If we have a toast component available, use it
-          if (window.dispatchEvent) {
-            window.dispatchEvent(new CustomEvent('show-toast', { 
-              detail: { 
-                message: 'New version available! Refresh to update.',
-                type: 'info',
-                duration: 10000,
-                action: {
-                  label: 'Refresh',
-                  onClick: () => window.location.reload()
-                }
-              } 
-            }));
-          }
-        }, 3000);
+        // Show update notification only once per session
+        if (!(window as any).updateNotificationShown) {
+          (window as any).updateNotificationShown = true;
+          
+          // Show update notification after a delay
+          setTimeout(() => {
+            // If we have a toast component available, use it
+            if (window.dispatchEvent) {
+              window.dispatchEvent(new CustomEvent('show-toast', { 
+                detail: { 
+                  message: 'New version available! Refresh to update.',
+                  type: 'info',
+                  duration: 10000,
+                  action: {
+                    label: 'Refresh',
+                    onClick: () => window.location.reload()
+                  }
+                } 
+              }));
+            }
+          }, 3000);
+        }
       });
     }
   }, 800);

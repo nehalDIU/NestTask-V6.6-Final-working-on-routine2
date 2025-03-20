@@ -10,96 +10,138 @@ const PREDICTABLE_ROUTES = [
   '/dashboard'
 ];
 
-// Service Worker registration
-export const registerServiceWorker = async () => {
-  if ('serviceWorker' in navigator) {
-    try {
-      const registration = await navigator.serviceWorker.register('/sw.js', {
-        scope: '/',
-        updateViaCache: 'none' // Always check network for updated service worker
-      });
-      
-      console.log('Service Worker registered successfully:', registration);
-      
-      // Set up update detection
-      setUpServiceWorkerUpdates(registration);
-      
-      // Register predictable routes for precaching
-      if (registration.active) {
-        precachePredictableRoutes(registration);
-      }
-      
-      return registration;
-    } catch (error) {
-      console.error('Service Worker registration failed:', error);
-      return null;
-    }
+// Service worker registration and management utilities
+
+// Register service worker
+export const registerServiceWorker = async (): Promise<ServiceWorkerRegistration | null> => {
+  if (!('serviceWorker' in navigator)) {
+    console.warn('Service Worker is not supported in this browser');
+    return null;
   }
-  return null;
+
+  try {
+    // Check if a service worker is already registered
+    const registrations = await navigator.serviceWorker.getRegistrations();
+    const existingRegistration = registrations.find(
+      (reg) => reg.active && reg.scope.includes(window.location.origin)
+    );
+
+    if (existingRegistration) {
+      console.log('Using existing service worker registration');
+      return existingRegistration;
+    }
+
+    // Register a new service worker
+    const registration = await navigator.serviceWorker.register('/service-worker.js', {
+      scope: '/',
+    });
+
+    console.log('Service worker registered with scope:', registration.scope);
+    return registration;
+  } catch (error) {
+    console.error('Service worker registration failed:', error);
+    return null;
+  }
 };
 
-// Handle service worker updates
-function setUpServiceWorkerUpdates(registration: ServiceWorkerRegistration) {
-  // When a new service worker is found
-  registration.addEventListener('updatefound', () => {
-    const newWorker = registration.installing;
-    
-    if (newWorker) {
-      // Track state changes
-      newWorker.addEventListener('statechange', () => {
-        // When the new service worker is installed but waiting
-        if (newWorker.state === 'installed') {
-          if (navigator.serviceWorker.controller) {
-            // There's a new service worker waiting to activate
-            console.log('New service worker available, ready to update');
-            
-            // Show UI notification to user about available update if needed
-            const updateEvent = new CustomEvent('serviceWorkerUpdateAvailable');
-            window.dispatchEvent(updateEvent);
-          } else {
-            // First-time service worker installation
-            console.log('Service Worker installed for the first time');
-          }
-        }
-      });
+// Keep service worker alive with periodic pings
+export const keepServiceWorkerAlive = (registration: ServiceWorkerRegistration): void => {
+  // Set ping interval to 5 minutes by default
+  const PING_INTERVAL = 5 * 60 * 1000;
+  
+  // Function to ping the service worker
+  const pingServiceWorker = () => {
+    if (registration && registration.active) {
+      // Send a simple message to the service worker
+      registration.active.postMessage({ type: 'PING' });
+      console.debug('Service worker ping sent');
+    }
+  };
+
+  // Initial ping
+  pingServiceWorker();
+
+  // Set up interval for regular pings
+  const intervalId = setInterval(pingServiceWorker, PING_INTERVAL);
+
+  // Clear interval when window is unloaded
+  window.addEventListener('beforeunload', () => {
+    clearInterval(intervalId);
+  });
+};
+
+// Update the service worker when a new version is available
+export const updateServiceWorker = (registration: ServiceWorkerRegistration): void => {
+  if (registration && registration.waiting) {
+    // Send message to the waiting service worker to activate it
+    registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+  }
+};
+
+// Check for updates
+export const checkForUpdates = (registration: ServiceWorkerRegistration): void => {
+  if (registration) {
+    registration.update().catch((error) => {
+      console.error('Service worker update check failed:', error);
+    });
+  }
+};
+
+// Handle connectivity changes
+export const handleConnectivityChange = (registration: ServiceWorkerRegistration): void => {
+  // When online, check for updates
+  window.addEventListener('online', () => {
+    console.log('Device is online. Checking for service worker updates...');
+    checkForUpdates(registration);
+  });
+
+  // When offline, notify the service worker
+  window.addEventListener('offline', () => {
+    if (registration && registration.active) {
+      registration.active.postMessage({ type: 'OFFLINE_MODE' });
     }
   });
-  
-  // Listen for controlling service worker change
-  navigator.serviceWorker.addEventListener('controllerchange', () => {
-    console.log('New service worker is now controlling the page');
-  });
-}
+};
+
+// Listen for service worker update events
+export const listenForUpdates = (callback: (registration: ServiceWorkerRegistration) => void): void => {
+  if (!('serviceWorker' in navigator)) return;
+
+  // Listen for the custom event from the service worker
+  window.addEventListener('sw-update-available', ((event: CustomEvent) => {
+    if (event.detail && event.detail.registration) {
+      callback(event.detail.registration);
+    }
+  }) as EventListener);
+};
+
+// Force reload after service worker update
+export const reloadAfterUpdate = (): void => {
+  window.location.reload();
+};
+
+// Clear service worker caches
+export const clearServiceWorkerCaches = async (): Promise<boolean> => {
+  if (!('caches' in window)) {
+    console.warn('Cache API is not supported in this browser');
+    return false;
+  }
+
+  try {
+    const cacheNames = await caches.keys();
+    await Promise.all(cacheNames.map(name => caches.delete(name)));
+    console.log('Service worker caches cleared');
+    return true;
+  } catch (error) {
+    console.error('Failed to clear service worker caches:', error);
+    return false;
+  }
+};
 
 // Check if the app is running in a service worker context
 export const isServiceWorker = () => {
   return typeof window !== 'undefined' && 'serviceWorker' in navigator && 
          navigator.serviceWorker.controller !== null;
-};
-
-// Keep service worker alive with periodic heartbeat to prevent it from being terminated
-export const keepServiceWorkerAlive = (registration: ServiceWorkerRegistration) => {
-  if (!registration) return;
-  
-  // Send periodic heartbeat to keep the service worker alive
-  setInterval(() => {
-    registration.active?.postMessage({ type: 'heartbeat' });
-  }, 30000); // Send heartbeat every 30 seconds
-};
-
-// Handle offline/online status changes
-export const handleConnectivityChange = (registration: ServiceWorkerRegistration) => {
-  if (!registration) return;
-  
-  window.addEventListener('online', () => {
-    console.log('App is online, syncing data...');
-    registration.active?.postMessage({ type: 'sync' });
-  });
-  
-  window.addEventListener('offline', () => {
-    console.log('App is offline, using cached data');
-    registration.active?.postMessage({ type: 'offline' });
-  });
 };
 
 // Precache predictable routes that the user is likely to visit
@@ -111,14 +153,6 @@ export const precachePredictableRoutes = (registration: ServiceWorkerRegistratio
     type: 'precacheAssets',
     assets: PREDICTABLE_ROUTES.map(route => route)
   });
-};
-
-// Update service worker immediately (skip waiting)
-export const updateServiceWorker = (registration: ServiceWorkerRegistration) => {
-  if (!registration.waiting) return;
-  
-  // Send message to waiting service worker to skip waiting
-  registration.waiting.postMessage({ type: 'skipWaiting' });
 };
 
 // Prefetch and cache resources for a specific route

@@ -1,14 +1,3 @@
-import { Workbox } from 'workbox-window';
-
-// Cache names for different types of assets
-const CACHE_NAMES = {
-  static: 'static-assets-v1',
-  dynamic: 'dynamic-content-v1',
-  images: 'images-v1',
-  fonts: 'fonts-v1',
-  api: 'api-cache-v1'
-};
-
 // Check if the app can be installed
 export function checkInstallability() {
   if ('BeforeInstallPromptEvent' in window) {
@@ -37,12 +26,33 @@ export async function installPWA() {
 // Register for push notifications
 export async function registerPushNotifications() {
   try {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+      console.warn('Push notifications not supported in this browser');
+      return null;
+    }
+    
     const registration = await navigator.serviceWorker.ready;
+    
+    // Check for existing subscription first
+    const existingSubscription = await registration.pushManager.getSubscription();
+    if (existingSubscription) {
+      console.log('Using existing push subscription');
+      return existingSubscription;
+    }
+    
+    // Request new subscription
+    const vapidKey = import.meta.env.VITE_VAPID_PUBLIC_KEY || '';
+    if (!vapidKey) {
+      console.error('VAPID public key is missing');
+      return null;
+    }
+    
     const subscription = await registration.pushManager.subscribe({
       userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(process.env.VITE_VAPID_PUBLIC_KEY || '')
+      applicationServerKey: urlBase64ToUint8Array(vapidKey)
     });
     
+    console.log('Push notification subscription successful');
     return subscription;
   } catch (error) {
     console.error('Failed to register push notifications:', error);
@@ -51,278 +61,223 @@ export async function registerPushNotifications() {
 }
 
 // Track service worker registration state
-let workbox: Workbox | null = null;
+let serviceWorkerRegistration: ServiceWorkerRegistration | null = null;
 
-// Register service worker using Workbox for better caching and performance
+// Register service worker for offline support with optimized handling
 export async function registerServiceWorker() {
-  if (!('serviceWorker' in navigator)) return null;
+  if (!('serviceWorker' in navigator)) {
+    console.warn('Service Worker is not supported in this browser');
+    return null;
+  }
+  
+  // Use cached registration if available
+  if (serviceWorkerRegistration) return serviceWorkerRegistration;
   
   try {
-    // Use Workbox for better service worker management
-    if (!workbox) {
-      workbox = new Workbox('/service-worker.js', {
-        scope: '/'
-      });
+    // Check if service worker is already registered
+    const registrations = await navigator.serviceWorker.getRegistrations();
+    const existingRegistration = registrations.find(reg => 
+      reg.active && reg.scope.includes(window.location.origin)
+    );
+    
+    if (existingRegistration) {
+      serviceWorkerRegistration = existingRegistration;
+      console.log('Using existing service worker registration');
       
-      // Set up update handling
-      workbox.addEventListener('waiting', showUpdatePrompt);
-      workbox.addEventListener('controlling', () => {
-        // If a new service worker is controlling the page, reload for fresh content
-        window.location.reload();
-      });
+      // Set up update handler
+      setupUpdateHandler(existingRegistration);
       
-      // Set up message handling for background sync events
-      workbox.addEventListener('message', (event) => {
-        if (event.data && event.data.type === 'CACHE_UPDATED') {
-          const { updatedURL } = event.data.payload;
-          console.log(`Content for ${updatedURL} has been updated in the cache.`);
-        }
-        
-        if (event.data && event.data.type === 'BACKGROUND_SYNC_SUCCESS') {
-          console.log('Background sync completed successfully:', event.data.payload);
-          // Notify the user that their action completed in the background
-          notifyBackgroundSyncComplete(event.data.payload);
-        }
-      });
+      // Force an update check immediately
+      existingRegistration.update().catch(err => 
+        console.warn('Initial update check failed:', err)
+      );
       
-      // Register the service worker
-      await workbox.register();
-      console.log('Service Worker registered with Workbox');
-      
-      // Schedule periodic updates
-      schedulePeriodicUpdates();
-      
-      return workbox.getSW();
+      return existingRegistration;
     }
     
-    return workbox.getSW();
+    // Register new service worker with optimized timing and error handling
+    const registration = await navigator.serviceWorker.register('/service-worker.js', {
+      scope: '/',
+      updateViaCache: 'none', // Always go to network for updates
+    });
+    
+    serviceWorkerRegistration = registration;
+    console.log('Service Worker registered successfully with scope:', registration.scope);
+    
+    // Set up service worker update handling
+    setupUpdateHandler(registration);
+    
+    return registration;
   } catch (error) {
     console.error('Service Worker registration failed:', error);
     
-    // Try one more time after a delay with a simpler approach
+    // Try one more time after a delay
     return new Promise(resolve => {
       setTimeout(async () => {
         try {
-          const retryRegistration = await navigator.serviceWorker.register('/service-worker.js', {
-            scope: '/'
-          });
-          console.log('Service Worker registered with fallback method');
+          // Use simple registration parameters for retry
+          const retryRegistration = await navigator.serviceWorker.register('/service-worker.js');
+          serviceWorkerRegistration = retryRegistration;
+          console.log('Service Worker registered on second attempt');
+          setupUpdateHandler(retryRegistration);
           resolve(retryRegistration);
         } catch (retryError) {
           console.error('Service worker retry failed:', retryError);
           resolve(null);
         }
-      }, 2000);
+      }, 3000); // Longer timeout for retry
     });
   }
 }
 
-// Show update prompt when a new service worker is available
-function showUpdatePrompt() {
-  // Dispatch event for UI to show an update notification
-  window.dispatchEvent(new CustomEvent('sw-update-available', {
-    detail: {
-      onUpdate: () => {
-        if (workbox) {
-          workbox.messageSW({ type: 'SKIP_WAITING' });
+// Helper function to handle service worker updates
+function setupUpdateHandler(registration: ServiceWorkerRegistration) {
+  // Set up service worker update handling
+  registration.addEventListener('updatefound', () => {
+    const newWorker = registration.installing;
+    if (!newWorker) return;
+    
+    newWorker.addEventListener('statechange', () => {
+      if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+        // New content is available, show update notification
+        console.log('New version available! Refresh to update.');
+        
+        // Dispatch event for the app to show a refresh notification
+        window.dispatchEvent(new CustomEvent('sw-update-available', {
+          detail: { registration }
+        }));
+      }
+    });
+  });
+  
+  // Check updates with intelligent scheduling
+  if (registration.active) {
+    // Schedule first update check based on connection quality
+    let updateCheckDelay = 30 * 60 * 1000; // Default 30 minutes
+    
+    if (navigator.onLine) {
+      try {
+        // Check for Network Information API support
+        if ('connection' in navigator && 
+            navigator.connection && 
+            'effectiveType' in (navigator.connection as any)) {
+          if ((navigator.connection as any).effectiveType === '4g') {
+            updateCheckDelay = 5 * 60 * 1000; // 5 minutes for fast connections
+          } else {
+            updateCheckDelay = 15 * 60 * 1000; // 15 minutes for slower connections
+          }
         }
+      } catch (error) {
+        console.warn('Error checking connection type:', error);
       }
     }
-  }));
-}
-
-// Notify user when background sync completes
-function notifyBackgroundSyncComplete(data: any) {
-  if ('Notification' in window && Notification.permission === 'granted') {
-    new Notification('Sync Complete', {
-      body: 'Your changes have been saved and synchronized.',
-      icon: '/icons/icon-192x192.png'
-    });
+    
+    if ('requestIdleCallback' in window) {
+      (window as any).requestIdleCallback(() => {
+        setTimeout(() => schedulePeriodicUpdates(registration), updateCheckDelay);
+      }, { timeout: 10000 });
+    } else {
+      setTimeout(() => schedulePeriodicUpdates(registration), updateCheckDelay);
+    }
   }
 }
 
 // Helper function to schedule periodic updates
-function schedulePeriodicUpdates() {
-  // Check for updates every hour using requestIdleCallback
-  const checkInterval = 60 * 60 * 1000; // 1 hour
-  
-  const scheduleNextCheck = () => {
-    if ('requestIdleCallback' in window) {
-      (window as any).requestIdleCallback(() => {
-        if (workbox) {
-          workbox.update();
-        }
-        setTimeout(scheduleNextCheck, checkInterval);
-      }, { timeout: 10000 });
-    } else {
-      setTimeout(() => {
-        if (workbox) {
-          workbox.update();
-        }
-        scheduleNextCheck();
-      }, checkInterval);
-    }
-  };
-  
-  // Schedule first check
-  scheduleNextCheck();
-}
-
-// Prefetch critical assets
-export async function prefetchCriticalAssets(assets: string[]) {
-  try {
-    if ('caches' in window) {
-      const cache = await caches.open(CACHE_NAMES.static);
-      return cache.addAll(assets);
-    }
-    return false;
-  } catch (error) {
-    console.error('Failed to prefetch assets:', error);
-    return false;
+function schedulePeriodicUpdates(registration: ServiceWorkerRegistration) {
+  // Don't update if user is offline
+  if (!navigator.onLine) {
+    console.log('Skipping service worker update check - user is offline');
+    setTimeout(() => schedulePeriodicUpdates(registration), 30 * 60 * 1000);
+    return;
   }
-}
-
-// Preload images for faster display
-export function preloadImages(imageUrls: string[]) {
-  if (!Array.isArray(imageUrls) || imageUrls.length === 0) return;
   
-  // Use requestIdleCallback to not block the main thread
+  // Update when network is idle and user is likely not active
+  console.log('Checking for service worker updates...');
+  registration.update()
+    .then(() => console.log('Service worker update check completed'))
+    .catch(err => console.error('Error updating service worker:', err));
+  
+  // Use adaptive timing based on user interaction patterns
+  // More frequent updates if user is actively using the app
+  const lastUserInteraction = (window as any).lastUserInteraction || Date.now();
+  const timeSinceInteraction = Date.now() - lastUserInteraction;
+  
+  // 30 minutes if user recently interacted, 2 hours otherwise
+  const nextUpdateDelay = timeSinceInteraction < 15 * 60 * 1000 ? 
+    30 * 60 * 1000 : 2 * 60 * 60 * 1000;
+  
   if ('requestIdleCallback' in window) {
     (window as any).requestIdleCallback(() => {
-      imageUrls.forEach(url => {
-        const img = new Image();
-        img.src = url;
-      });
-    }, { timeout: 2000 });
+      setTimeout(() => schedulePeriodicUpdates(registration), nextUpdateDelay);
+    }, { timeout: 10000 });
   } else {
-    // Fallback
-    setTimeout(() => {
-      imageUrls.forEach(url => {
-        const img = new Image();
-        img.src = url;
-      });
-    }, 1000);
+    setTimeout(() => schedulePeriodicUpdates(registration), nextUpdateDelay);
   }
 }
 
-// Initialize PWA features with enhanced performance and caching
-export async function initPWA(options = {
-  prefetchAssets: [] as string[],
-  preloadImages: [] as string[],
-}) {
-  // Initialize features in parallel
-  const results = await Promise.allSettled([
-    Promise.resolve().then(checkInstallability),
-    Promise.resolve().then(registerServiceWorker),
-    Promise.resolve().then(() => prefetchCriticalAssets(options.prefetchAssets))
-  ]);
+// Initialize PWA features with optimized performance
+export async function initPWA() {
+  try {
+    // Track user interaction for intelligent update scheduling
+    document.addEventListener('click', () => {
+      (window as any).lastUserInteraction = Date.now();
+    });
+    
+    // Initialize features in parallel with timeouts
+    const [installabilityResult, serviceWorkerResult] = await Promise.allSettled([
+      Promise.race([
+        Promise.resolve().then(checkInstallability),
+        new Promise(resolve => setTimeout(() => resolve('timeout'), 2000))
+      ]),
+      Promise.race([
+        Promise.resolve().then(registerServiceWorker),
+        new Promise(resolve => setTimeout(() => resolve('timeout'), 5000))
+      ])
+    ]);
   
-  // Preload images after critical initialization
-  if (options.preloadImages.length > 0) {
-    preloadImages(options.preloadImages);
-  }
-  
-  // Log any errors but don't block the app
-  results.forEach((result, index) => {
-    if (result.status === 'rejected') {
-      console.error(`PWA initialization step ${index} failed:`, result.reason);
+    // Check results
+    if (installabilityResult.status === 'rejected') {
+      console.warn('PWA installability check failed:', installabilityResult.reason);
     }
-  });
-  
-  return true;
+    
+    if (serviceWorkerResult.status === 'rejected') {
+      console.warn('Service worker registration failed:', serviceWorkerResult.reason);
+    }
+    
+    // Request persistent storage for PWA data
+    if ('storage' in navigator && 'persist' in navigator.storage) {
+      navigator.storage.persist()
+        .then(isPersisted => console.log(`Persistent storage granted: ${isPersisted}`))
+        .catch(err => console.warn('Error requesting persistent storage:', err));
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('PWA initialization error:', error);
+    // Continue app operation even if PWA features fail
+    return false;
+  }
 }
 
 // Helper function to convert VAPID key
 function urlBase64ToUint8Array(base64String: string) {
-  const padding = '='.repeat((4 - base64String.length % 4) % 4);
-  const base64 = (base64String + padding)
-    .replace(/\-/g, '+')
-    .replace(/_/g, '/');
-
-  const rawData = window.atob(base64);
-  const outputArray = new Uint8Array(rawData.length);
-
-  for (let i = 0; i < rawData.length; ++i) {
-    outputArray[i] = rawData.charCodeAt(i);
-  }
-  return outputArray;
-}
-
-// API for background sync registration
-export async function registerBackgroundSync(syncName: string) {
-  if (!('serviceWorker' in navigator) || !('SyncManager' in window)) {
-    console.warn('Background sync not supported');
-    return false;
-  }
+  if (!base64String) return new Uint8Array();
   
   try {
-    const registration = await navigator.serviceWorker.ready;
-    // Use type assertion to fix TypeScript error
-    await (registration as any).sync.register(syncName);
-    console.log(`Background sync registered: ${syncName}`);
-    return true;
-  } catch (err) {
-    console.error('Background sync registration failed:', err);
-    return false;
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding)
+      .replace(/\-/g, '+')
+      .replace(/_/g, '/');
+
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+
+    for (let i = 0; i < rawData.length; ++i) {
+      outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+  } catch (error) {
+    console.error('Error converting base64 to Uint8Array:', error);
+    return new Uint8Array();
   }
-}
-
-// Store data in IndexedDB for offline use
-export async function storeInIndexedDB(storeName: string, key: string, data: any) {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open('pwa-app-db', 1);
-    
-    request.onupgradeneeded = (event) => {
-      const db = (event.target as IDBOpenDBRequest).result;
-      if (!db.objectStoreNames.contains(storeName)) {
-        db.createObjectStore(storeName, { keyPath: 'id' });
-      }
-    };
-    
-    request.onsuccess = (event) => {
-      const db = (event.target as IDBOpenDBRequest).result;
-      const transaction = db.transaction(storeName, 'readwrite');
-      const store = transaction.objectStore(storeName);
-      
-      const storeRequest = store.put({ id: key, data });
-      
-      storeRequest.onsuccess = () => resolve(true);
-      storeRequest.onerror = () => reject(new Error('Failed to store data'));
-      
-      transaction.oncomplete = () => db.close();
-    };
-    
-    request.onerror = () => reject(new Error('Failed to open database'));
-  });
-}
-
-// Get data from IndexedDB
-export async function getFromIndexedDB(storeName: string, key: string) {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open('pwa-app-db', 1);
-    
-    request.onsuccess = (event) => {
-      const db = (event.target as IDBOpenDBRequest).result;
-      if (!db.objectStoreNames.contains(storeName)) {
-        resolve(null);
-        return;
-      }
-      
-      const transaction = db.transaction(storeName, 'readonly');
-      const store = transaction.objectStore(storeName);
-      
-      const getRequest = store.get(key);
-      
-      getRequest.onsuccess = () => {
-        const result = getRequest.result;
-        resolve(result ? result.data : null);
-      };
-      
-      getRequest.onerror = () => reject(new Error('Failed to get data'));
-      
-      transaction.oncomplete = () => db.close();
-    };
-    
-    request.onerror = () => reject(new Error('Failed to open database'));
-  });
 }

@@ -31,7 +31,8 @@ import { supabase } from './lib/supabase';
 import { preloadPredictedRoutes, preloadRoute, ROUTES } from './utils/routePreloader';
 import { requestPersistentStorage, checkStorageSpace } from './utils/offlineStorage';
 import { registerServiceWorker, keepServiceWorkerAlive, handleConnectivityChange } from './utils/serviceWorker';
-import ServiceWorkerUpdateNotification from './components/ui/ServiceWorkerUpdateNotification';
+import { ServiceWorkerUpdateNotification } from './components/ui/ServiceWorkerUpdateNotification';
+import { trackPerformanceMetrics, applyPerformanceOptimizations } from './utils/performance';
 
 // Declare global type extension for Window
 declare global {
@@ -100,6 +101,17 @@ export default function App() {
     threshold: 2
   });
 
+  // Initialize performance monitoring
+  useEffect(() => {
+    // Start performance monitoring after app is loaded
+    if (!isLoading && user) {
+      setTimeout(() => {
+        trackPerformanceMetrics();
+        applyPerformanceOptimizations();
+      }, 1000);
+    }
+  }, [isLoading, user]);
+
   // Preload resources for predicted pages
   useEffect(() => {
     if (predictedPages.length > 0) {
@@ -139,6 +151,30 @@ export default function App() {
     // Preload the current route
     preloadRoute(routePath);
   }, [activePage]);
+
+  // Initialize and register service worker
+  useEffect(() => {
+    const initializeServiceWorker = async () => {
+      if ('serviceWorker' in navigator) {
+        try {
+          const registration = await registerServiceWorker();
+          if (registration) {
+            // Keep service worker active
+            keepServiceWorkerAlive(registration);
+            
+            console.log('Service worker registered successfully');
+          }
+        } catch (error) {
+          console.error('Failed to register service worker:', error);
+        }
+      }
+    };
+    
+    // Initialize after a short delay to prioritize app loading
+    setTimeout(() => {
+      initializeServiceWorker();
+    }, 2000);
+  }, []);
 
   // Calculate today's task count - always compute this value regardless of rendering path
   const todayTaskCount = useMemo(() => {
@@ -614,8 +650,11 @@ export default function App() {
       <InstallPWA />
       <OfflineIndicator />
       <OfflineToast />
-      <OfflineSyncManager onSync={syncAllOfflineChanges} />
-      <ServiceWorkerUpdateNotification />
+      <OfflineSyncManager 
+        isOffline={isOffline} 
+        onSync={syncAllOfflineChanges} 
+      />
+      <ServiceWorkerUpdateNotification position="bottom" />
     </div>
   );
 }

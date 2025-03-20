@@ -1,79 +1,97 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { RefreshCw, X } from 'lucide-react';
 
-// Add keyframe styles to the component
-const slideUpAnimation = `
-  @keyframes slideUp {
-    from {
-      transform: translateY(100%);
-      opacity: 0;
-    }
-    to {
-      transform: translateY(0);
-      opacity: 1;
-    }
-  }
-`;
+interface ServiceWorkerUpdateNotificationProps {
+  duration?: number;
+  position?: 'top' | 'bottom';
+}
 
-export default function ServiceWorkerUpdateNotification() {
-  const [isUpdateAvailable, setIsUpdateAvailable] = useState(false);
-  const [updateHandler, setUpdateHandler] = useState<(() => void) | null>(null);
-
+export function ServiceWorkerUpdateNotification({
+  duration = 0, // 0 means it will stay until dismissed
+  position = 'bottom'
+}: ServiceWorkerUpdateNotificationProps) {
+  const [visible, setVisible] = useState(false);
+  
   useEffect(() => {
-    // Add keyframe animation to the document head
-    const styleElement = document.createElement('style');
-    styleElement.textContent = slideUpAnimation;
-    document.head.appendChild(styleElement);
-
-    const handleUpdate = (event: Event) => {
-      const customEvent = event as CustomEvent<{ onUpdate: () => void }>;
+    // Listen for update available events
+    const handleUpdateAvailable = () => {
+      setVisible(true);
       
-      // Check if update handler is available
-      if (customEvent.detail?.onUpdate) {
-        setIsUpdateAvailable(true);
-        setUpdateHandler(() => customEvent.detail.onUpdate);
-      } else {
-        setIsUpdateAvailable(true);
-        setUpdateHandler(() => () => window.location.reload());
+      // Auto-hide after duration if specified
+      if (duration > 0) {
+        const timer = setTimeout(() => {
+          setVisible(false);
+        }, duration);
+        
+        return () => clearTimeout(timer);
       }
     };
-
-    // Listen for service worker update events
-    window.addEventListener('sw-update-available', handleUpdate);
-
-    return () => {
-      window.removeEventListener('sw-update-available', handleUpdate);
-      // Remove the style element on unmount
-      document.head.removeChild(styleElement);
+    
+    // Listen for service worker updates
+    window.addEventListener('sw-update-available', handleUpdateAvailable);
+    
+    // Also listen for toast events with update message
+    const handleToastEvent = (event: CustomEvent) => {
+      const detail = event.detail;
+      if (detail?.message?.includes('New version') || 
+          detail?.message?.includes('update')) {
+        setVisible(true);
+      }
     };
-  }, []);
-
-  if (!isUpdateAvailable) return null;
-
+    
+    window.addEventListener('show-toast', handleToastEvent as EventListener);
+    
+    return () => {
+      window.removeEventListener('sw-update-available', handleUpdateAvailable);
+      window.removeEventListener('show-toast', handleToastEvent as EventListener);
+    };
+  }, [duration]);
+  
+  // Handle refresh action
+  const handleRefresh = () => {
+    window.location.reload();
+  };
+  
+  // Handle dismiss action
+  const handleDismiss = () => {
+    setVisible(false);
+  };
+  
   return (
-    <div 
-      className="fixed bottom-4 right-4 bg-blue-500 text-white rounded-lg shadow-lg p-4 z-50 flex items-center justify-between max-w-md"
-      style={{
-        animation: 'slideUp 0.3s ease-out',
-      }}
-    >
-      <div className="mr-4">
-        <p className="font-medium">New version available!</p>
-        <p className="text-sm opacity-90">Refresh to update the application</p>
-      </div>
-      <div className="flex space-x-2">
-        <button 
-          className="bg-white text-blue-500 px-3 py-1 rounded-md font-medium hover:bg-blue-50 transition-colors"
-          onClick={() => updateHandler && updateHandler()}
+    <AnimatePresence>
+      {visible && (
+        <motion.div
+          className={`fixed ${position === 'top' ? 'top-4' : 'bottom-4'} left-1/2 transform -translate-x-1/2 z-50`}
+          initial={{ opacity: 0, y: position === 'top' ? -20 : 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: position === 'top' ? -20 : 20 }}
+          transition={{ duration: 0.3 }}
         >
-          Update
-        </button>
-        <button 
-          className="text-white hover:text-blue-100 transition-colors"
-          onClick={() => setIsUpdateAvailable(false)}
-        >
-          Later
-        </button>
-      </div>
-    </div>
+          <div className="bg-blue-600 text-white px-4 py-3 rounded-lg shadow-lg flex items-center space-x-3 max-w-md w-full">
+            <RefreshCw className="h-5 w-5 animate-spin-slow" />
+            <div className="flex-1">
+              <p className="text-sm font-medium">New version available</p>
+              <p className="text-xs opacity-90">Refresh to update the application</p>
+            </div>
+            <div className="flex space-x-2">
+              <button
+                onClick={handleRefresh}
+                className="bg-white text-blue-600 px-3 py-1 rounded text-sm font-medium hover:bg-blue-50 transition-colors"
+              >
+                Update
+              </button>
+              <button
+                onClick={handleDismiss}
+                className="text-white/80 hover:text-white"
+                aria-label="Dismiss"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 } 

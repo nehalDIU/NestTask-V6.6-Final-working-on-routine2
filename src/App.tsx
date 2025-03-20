@@ -649,16 +649,7 @@ export default function App() {
       <InstallPWA />
       <OfflineIndicator />
       <OfflineToast />
-      <div className="fixed bottom-24 right-4 z-50">
-        <OfflineSyncManager
-          isOffline={isOffline}
-          isSyncing={false}
-          onSync={async () => {
-            await syncAllOfflineChanges();
-            return;
-          }}
-        />
-      </div>
+      <OfflineSyncManager />
       <ServiceWorkerUpdateNotification position="bottom" />
     </div>
   );

@@ -139,13 +139,15 @@ function setupUpdateHandler(registration: ServiceWorkerRegistration) {
     
     newWorker.addEventListener('statechange', () => {
       if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-        // New content is available, show update notification
-        console.log('New version available! Refresh to update.');
-        
-        // Dispatch event for the app to show a refresh notification
-        window.dispatchEvent(new CustomEvent('sw-update-available', {
-          detail: { registration }
-        }));
+        // Only show notification if there's actually a new version
+        if (newWorker.scriptURL !== registration.active?.scriptURL) {
+          console.log('New version available! Refresh to update.');
+          
+          // Dispatch event for the app to show a refresh notification
+          window.dispatchEvent(new CustomEvent('sw-update-available', {
+            detail: { registration }
+          }));
+        }
       }
     });
   });

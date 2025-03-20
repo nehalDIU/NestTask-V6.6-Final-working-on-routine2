@@ -13,7 +13,6 @@ import { NotificationPanel } from './components/notifications/NotificationPanel'
 import { InstallPWA } from './components/InstallPWA';
 import { OfflineIndicator } from './components/ui/OfflineIndicator';
 import { OfflineToast } from './components/ui/OfflineToast';
-import { OfflineSyncManager } from './components/ui/OfflineSyncManager';
 import { ListTodo, CheckCircle2, Clock, AlertCircle } from 'lucide-react';
 import { TaskCategories } from './components/task/TaskCategories';
 import { isOverdue, isSameDay } from './utils/dateUtils';
@@ -649,7 +648,6 @@ export default function App() {
       <InstallPWA />
       <OfflineIndicator />
       <OfflineToast />
-      <OfflineSyncManager />
       <ServiceWorkerUpdateNotification position="bottom" />
     </div>
   );

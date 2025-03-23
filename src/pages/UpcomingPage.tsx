@@ -5,13 +5,17 @@ import { useTasks } from '../hooks/useTasks';
 import { useAuth } from '../hooks/useAuth';
 import { TaskDetailsPopup } from '../components/task/TaskDetailsPopup';
 import { MonthlyCalendar } from '../components/MonthlyCalendar';
+import { PullToRefresh } from '../components/ui/PullToRefresh';
+import { usePullToRefresh } from '../hooks/usePullToRefresh';
+import { useOfflineStatus } from '../hooks/useOfflineStatus';
 import type { Task } from '../types';
 
 interface UpcomingPageProps {
   tasks: Task[];
+  onRefresh?: () => Promise<void>;
 }
 
-export function UpcomingPage() {
+export function UpcomingPage({ tasks: propTasks, onRefresh }: UpcomingPageProps) {
   const { user } = useAuth();
   const { tasks: allTasks, loading, error: taskError, updateTask } = useTasks(user?.id);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -22,6 +26,18 @@ export function UpcomingPage() {
   const [isMonthlyCalendarOpen, setIsMonthlyCalendarOpen] = useState(false);
   // Flag to prevent auto-selection of tasks after date change
   const [preventTaskSelection, setPreventTaskSelection] = useState(false);
+  const isOffline = useOfflineStatus();
+
+  // Initialize pull-to-refresh hook
+  const { refreshProps, isRefreshing } = usePullToRefresh({
+    onRefresh: async () => {
+      if (onRefresh) {
+        await onRefresh();
+      }
+    },
+    disabled: !onRefresh || isOffline, // Disable when offline or no refresh function
+    facebookStyle: true // Use Facebook-style pull-to-refresh
+  });
 
   // Create a reusable optimized date formatter
   const formatDate = (date: Date): string => {
@@ -293,363 +309,357 @@ export function UpcomingPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      {/* Error Alert */}
-      {(taskError || operationError) ? (
-        <div className="fixed top-4 right-4 z-50 bg-red-100 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 px-4 py-3 rounded-lg shadow-lg animate-fade-in">
-          <p className="text-sm font-medium">{taskError || operationError}</p>
-        </div>
-      ) : (
-        // This empty div ensures the error alert space is reserved but not blocking interactions
-        <div className="fixed top-4 right-4 z-50 pointer-events-none" style={{ opacity: 0 }}></div>
-      )}
-
-      {/* Loading Overlay */}
-      {isUpdating && (
-        <div className="fixed inset-0 bg-black/10 backdrop-blur-sm z-40 flex items-center justify-center">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-xl animate-scale-in">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
-            <p className="text-sm text-gray-600 dark:text-gray-300 mt-2">
-              Updating task...
-            </p>
+    <PullToRefresh {...refreshProps}>
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+        {/* Error Alert */}
+        {(taskError || operationError) ? (
+          <div className="fixed top-4 right-4 z-50 bg-red-100 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 px-4 py-3 rounded-lg shadow-lg animate-fade-in">
+            <p className="text-sm font-medium">{taskError || operationError}</p>
           </div>
-        </div>
-      )}
+        ) : (
+          // This empty div ensures the error alert space is reserved but not blocking interactions
+          <div className="fixed top-4 right-4 z-50 pointer-events-none" style={{ opacity: 0 }}></div>
+        )}
 
-      {/* Calendar Strip */}
-      <div className="max-w-full md:max-w-5xl mx-auto px-2 md:px-6 mb-6">
-        {/* Date Navigation */}
-        <div className="flex items-center justify-between mb-4 py-3">
-          <button 
-            onClick={() => setSelectedDate(new Date())}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold text-blue-600 dark:text-blue-400 bg-blue-50/80 dark:bg-blue-900/30 rounded-full hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-all duration-200"
+        {/* Loading Overlay */}
+        {isUpdating && (
+          <div className="fixed inset-0 bg-black/10 backdrop-blur-sm z-40 flex items-center justify-center">
+            <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-xl animate-scale-in">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
+              <p className="text-sm text-gray-600 dark:text-gray-300 mt-2">
+                Updating task...
+              </p>
+            </div>
+          </div>
+        )}
+
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Upcoming</h1>
+            <span className="text-sm text-gray-500 dark:text-gray-400">
+              {format(selectedDate, 'MMM d, yyyy')}
+            </span>
+          </div>
+          <button
+            onClick={() => setIsMonthlyCalendarOpen(!isMonthlyCalendarOpen)}
+            className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-600 dark:text-gray-300"
+            aria-label="Open calendar"
           >
-            <div className="w-1.5 h-1.5 rounded-full bg-blue-500 dark:bg-blue-400 animate-pulse"></div>
-            Today
+            <CalendarDays className="w-5 h-5" />
           </button>
+        </div>
 
-          <span 
-            className="text-sm md:text-base font-medium text-gray-600 dark:text-gray-300 cursor-pointer hover:text-blue-500 dark:hover:text-blue-400 transition-colors"
-            onClick={() => setIsMonthlyCalendarOpen(true)}
-          >
-            {format(selectedDate, 'MMMM yyyy')}
-          </span>
-
-          <div className="flex items-center bg-gray-100/80 dark:bg-gray-800/80 rounded-lg p-1">
-            <button
-              onClick={() => {
-                const newDate = addDays(selectedDate, -7);
-                setSelectedDate(newDate);
-              }}
-              className="p-1.5 rounded-md text-gray-600 hover:text-blue-600 hover:bg-white dark:text-gray-300 dark:hover:text-blue-400 dark:hover:bg-gray-700 transition-all duration-200"
-              aria-label="Previous week"
+        {/* Calendar Strip */}
+        <div className="max-w-full md:max-w-5xl mx-auto px-2 md:px-6 mb-6">
+          {/* Date Navigation */}
+          <div className="flex items-center justify-between mb-4 py-3">
+            <button 
+              onClick={() => setSelectedDate(new Date())}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold text-blue-600 dark:text-blue-400 bg-blue-50/80 dark:bg-blue-900/30 rounded-full hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-all duration-200"
             >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
+              <div className="w-1.5 h-1.5 rounded-full bg-blue-500 dark:bg-blue-400 animate-pulse"></div>
+              Today
             </button>
 
-            <button
-              onClick={() => {
-                const newDate = addDays(selectedDate, 7);
-                setSelectedDate(newDate);
-              }}
-              className="p-1.5 rounded-md text-gray-600 hover:text-blue-600 hover:bg-white dark:text-gray-300 dark:hover:text-blue-400 dark:hover:bg-gray-700 transition-all duration-200"
-              aria-label="Next week"
+            <span 
+              className="text-sm md:text-base font-medium text-gray-600 dark:text-gray-300 cursor-pointer hover:text-blue-500 dark:hover:text-blue-400 transition-colors"
+              onClick={() => setIsMonthlyCalendarOpen(true)}
             >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
+              {format(selectedDate, 'MMMM yyyy')}
+            </span>
+
+            <div className="flex items-center bg-gray-100/80 dark:bg-gray-800/80 rounded-lg p-1">
+              <button
+                onClick={() => {
+                  const newDate = addDays(selectedDate, -7);
+                  setSelectedDate(newDate);
+                }}
+                className="p-1.5 rounded-md text-gray-600 hover:text-blue-600 hover:bg-white dark:text-gray-300 dark:hover:text-blue-400 dark:hover:bg-gray-700 transition-all duration-200"
+                aria-label="Previous week"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+
+              <button
+                onClick={() => {
+                  const newDate = addDays(selectedDate, 7);
+                  setSelectedDate(newDate);
+                }}
+                className="p-1.5 rounded-md text-gray-600 hover:text-blue-600 hover:bg-white dark:text-gray-300 dark:hover:text-blue-400 dark:hover:bg-gray-700 transition-all duration-200"
+                aria-label="Next week"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          {/* Date Boxes */}
+          <div className="grid grid-cols-7 gap-2 md:gap-3 lg:gap-4 px-0 md:px-4">
+            {weekDays.map((day) => (
+              <button
+                key={day.day}
+                onClick={() => setSelectedDate(day.date)}
+                className={`
+                  relative group
+                  flex flex-col items-center justify-center
+                  w-full aspect-square md:aspect-[3/4]
+                  p-1.5 md:p-3 lg:p-4 rounded-xl 
+                  border transition-all duration-300
+                  ${day.isSelected
+                    ? 'bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-600 border-blue-400/50 shadow-md shadow-blue-500/20 dark:shadow-blue-600/20 scale-[1.02] -translate-y-0.5 md:scale-105'
+                    : day.isToday
+                    ? 'bg-gradient-to-br from-blue-100 via-indigo-50 to-purple-50 border-blue-200/70 dark:from-blue-900/50 dark:via-indigo-900/40 dark:to-purple-900/50 dark:border-blue-700/50'
+                    : 'bg-white/90 dark:bg-gray-800/90 border-gray-200/50 dark:border-gray-700/50'
+                  }
+                  hover:shadow-md hover:-translate-y-0.5
+                  hover:border-blue-300/70 dark:hover:border-blue-600/70
+                  active:scale-95 touch-manipulation
+                  md:hover:shadow-lg md:hover:-translate-y-1
+                `}
+              >
+                {/* Weekday */}
+                <span className={`
+                  text-xs md:text-sm font-semibold tracking-wide
+                  transition-colors duration-200
+                  ${day.isSelected
+                    ? 'text-blue-100'
+                    : day.isToday
+                    ? 'text-blue-600/90 dark:text-blue-400'
+                    : 'text-gray-500 group-hover:text-blue-500 dark:text-gray-400 dark:group-hover:text-blue-400'
+                  }
+                  mb-1 md:mb-2
+                `}>
+                  {day.weekDay}
+                </span>
+
+                {/* Day Number */}
+                <span className={`
+                  text-lg md:text-3xl lg:text-4xl font-bold 
+                  transition-colors duration-200
+                  ${day.isSelected
+                    ? 'text-white'
+                    : day.isToday
+                    ? 'text-blue-600/90 dark:text-blue-400'
+                    : 'text-gray-700 group-hover:text-blue-600 dark:text-gray-300 dark:group-hover:text-blue-400'
+                  }
+                `}>
+                  {day.day}
+                </span>
+
+                {/* Today Indicator */}
+                {day.isToday && !day.isSelected && (
+                  <div className="absolute -bottom-0.5 left-1/2 transform -translate-x-1/2">
+                    <div className="w-1.5 h-1.5 md:w-2 md:h-2 rounded-full bg-gradient-to-r from-blue-500 to-indigo-500 dark:from-blue-400 dark:to-indigo-400 animate-pulse shadow-lg shadow-blue-500/50"></div>
+                  </div>
+                )}
+
+                {/* Selected Indicator */}
+                {day.isSelected && (
+                  <div className="absolute inset-0 rounded-xl ring-2 ring-blue-400/40 dark:ring-blue-500/40 animate-pulse"></div>
+                )}
+              </button>
+            ))}
           </div>
         </div>
 
-        {/* Date Boxes */}
-        <div className="grid grid-cols-7 gap-2 md:gap-3 lg:gap-4 px-0 md:px-4">
-          {weekDays.map((day) => (
-            <button
-              key={day.day}
-              onClick={() => setSelectedDate(day.date)}
-              className={`
-                relative group
-                flex flex-col items-center justify-center
-                w-full aspect-square md:aspect-[3/4]
-                p-1.5 md:p-3 lg:p-4 rounded-xl 
-                border transition-all duration-300
-                ${day.isSelected
-                  ? 'bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-600 border-blue-400/50 shadow-md shadow-blue-500/20 dark:shadow-blue-600/20 scale-[1.02] -translate-y-0.5 md:scale-105'
-                  : day.isToday
-                  ? 'bg-gradient-to-br from-blue-100 via-indigo-50 to-purple-50 border-blue-200/70 dark:from-blue-900/50 dark:via-indigo-900/40 dark:to-purple-900/50 dark:border-blue-700/50'
-                  : 'bg-white/90 dark:bg-gray-800/90 border-gray-200/50 dark:border-gray-700/50'
-                }
-                hover:shadow-md hover:-translate-y-0.5
-                hover:border-blue-300/70 dark:hover:border-blue-600/70
-                active:scale-95 touch-manipulation
-                md:hover:shadow-lg md:hover:-translate-y-1
-              `}
-            >
-              {/* Weekday */}
-              <span className={`
-                text-xs md:text-sm font-semibold tracking-wide
-                transition-colors duration-200
-                ${day.isSelected
-                  ? 'text-blue-100'
-                  : day.isToday
-                  ? 'text-blue-600/90 dark:text-blue-400'
-                  : 'text-gray-500 group-hover:text-blue-500 dark:text-gray-400 dark:group-hover:text-blue-400'
-                }
-                mb-1 md:mb-2
-              `}>
-                {day.weekDay}
-              </span>
-
-              {/* Day Number */}
-              <span className={`
-                text-lg md:text-3xl lg:text-4xl font-bold 
-                transition-colors duration-200
-                ${day.isSelected
-                  ? 'text-white'
-                  : day.isToday
-                  ? 'text-blue-600/90 dark:text-blue-400'
-                  : 'text-gray-700 group-hover:text-blue-600 dark:text-gray-300 dark:group-hover:text-blue-400'
-                }
-              `}>
-                {day.day}
-              </span>
-
-              {/* Today Indicator */}
-              {day.isToday && !day.isSelected && (
-                <div className="absolute -bottom-0.5 left-1/2 transform -translate-x-1/2">
-                  <div className="w-1.5 h-1.5 md:w-2 md:h-2 rounded-full bg-gradient-to-r from-blue-500 to-indigo-500 dark:from-blue-400 dark:to-indigo-400 animate-pulse shadow-lg shadow-blue-500/50"></div>
-                </div>
-              )}
-
-              {/* Selected Indicator */}
-              {day.isSelected && (
-                <div className="absolute inset-0 rounded-xl ring-2 ring-blue-400/40 dark:ring-blue-500/40 animate-pulse"></div>
-              )}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Tasks List with Enhanced Cards */}
-      <div className="px-4 md:max-w-4xl lg:max-w-5xl md:mx-auto pb-8">
-        {filteredTasks.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredTasks.map((task) => {
-              const status = getTaskStatus(task);
-              const categoryInfo = getCategoryInfo(task.category);
-              const dueDate = parseISO(task.dueDate);
-              const currentDate = new Date();
-              // Compare dates without time to determine if task is overdue
-              const isOverdue = isBefore(endOfDay(dueDate), startOfDay(currentDate));
-              
-              return (
-                <div
-                  key={task.id}
-                  onClick={() => {
-                    // Only allow task selection if not prevented
-                    if (!preventTaskSelection) {
-                      setSelectedTask(task);
-                    }
-                  }}
-                  className={`
-                    group h-full bg-white dark:bg-gray-800/90 rounded-lg
-                    shadow-sm hover:shadow-lg
-                    border border-gray-100 dark:border-gray-700/50
-                    hover:border-blue-200 dark:hover:border-blue-600/50
-                    relative overflow-hidden ${preventTaskSelection ? '' : 'cursor-pointer'}
-                    transition-all duration-200
-                    transform ${preventTaskSelection ? '' : 'hover:-translate-y-1'}
-                    flex flex-col
-                    ${task.status === 'completed' 
-                      ? 'opacity-80 hover:opacity-95' 
-                      : isOverdue
-                        ? 'border-l-[3px] border-l-red-500' 
-                        : ''
-                    }
-                  `}
-                >
-                  <div className="p-4 flex-grow flex flex-col">
-                    {/* Header Section without Category Tag */}
-                    <div className="flex items-start mb-3">
-                      <div className="flex items-start gap-2 min-w-0">
-                        <h3 className={`
-                          text-base font-semibold leading-tight truncate
-                          ${task.status === 'completed'
-                            ? 'text-gray-500 dark:text-gray-400 line-through'
-                            : isOverdue
-                              ? 'text-red-800 dark:text-red-300'
-                              : 'text-gray-800 dark:text-gray-100'
-                          }
-                        `}>
-                          {task.name}
-                        </h3>
-                        {task.isAdminTask && (
-                          <div className="flex-shrink-0 p-0.5 mt-0.5">
-                            <Crown className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400" />
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Description */}
-                    <p className={`
-                      text-sm leading-relaxed line-clamp-2 mb-4 flex-grow
-                      ${task.status === 'completed'
-                        ? 'text-gray-500 dark:text-gray-400'
-                        : isOverdue
-                          ? 'text-gray-700 dark:text-gray-300'
-                          : 'text-gray-600 dark:text-gray-300'
+        {/* Tasks List with Enhanced Cards */}
+        <div className="px-4 md:max-w-4xl lg:max-w-5xl md:mx-auto pb-8">
+          {filteredTasks.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredTasks.map((task) => {
+                const status = getTaskStatus(task);
+                const categoryInfo = getCategoryInfo(task.category);
+                const dueDate = parseISO(task.dueDate);
+                const currentDate = new Date();
+                // Compare dates without time to determine if task is overdue
+                const isOverdue = isBefore(endOfDay(dueDate), startOfDay(currentDate));
+                
+                return (
+                  <div
+                    key={task.id}
+                    onClick={() => {
+                      // Only allow task selection if not prevented
+                      if (!preventTaskSelection) {
+                        setSelectedTask(task);
                       }
-                    `}>
-                      {task.description}
-                    </p>
-
-                    {/* Footer Section */}
-                    <div className="flex items-center justify-between pt-2 border-t border-gray-100 dark:border-gray-700/50">
-                      {/* Due Date */}
-                      <div className="flex items-center gap-1.5">
-                        <Calendar className={`
-                          w-3.5 h-3.5
-                          ${isOverdue && !task.status 
-                            ? 'text-red-500 dark:text-red-400' 
-                            : 'text-gray-500 dark:text-gray-400'
-                          }`} 
-                        />
-                        <span className={`
-                          text-xs font-medium
-                          ${isOverdue && !task.status 
-                            ? 'text-red-500 dark:text-red-400' 
-                            : 'text-gray-500 dark:text-gray-400'
-                          }`
-                        }>
-                          Due: {format(dueDate, 'MMM d')}
-                        </span>
-                      </div>
-                      
-                      {/* Status Badge and Category Tag */}
-                      <div className="flex items-center gap-2">
-                        {/* Status Badge - only show for Completed or Overdue */}
-                        {(task.status === 'completed' || isOverdue) && (
-                          <span className={`
-                            inline-flex items-center gap-1
-                            px-2 py-0.5
-                            text-[10px] font-medium
-                            rounded-full
+                    }}
+                    className={`
+                      group h-full bg-white dark:bg-gray-800/90 rounded-lg
+                      shadow-sm hover:shadow-lg
+                      border border-gray-100 dark:border-gray-700/50
+                      hover:border-blue-200 dark:hover:border-blue-600/50
+                      relative overflow-hidden ${preventTaskSelection ? '' : 'cursor-pointer'}
+                      transition-all duration-200
+                      transform ${preventTaskSelection ? '' : 'hover:-translate-y-1'}
+                      flex flex-col
+                      ${task.status === 'completed' 
+                        ? 'opacity-80 hover:opacity-95' 
+                        : isOverdue
+                          ? 'border-l-[3px] border-l-red-500' 
+                          : ''
+                      }
+                    `}
+                  >
+                    <div className="p-4 flex-grow flex flex-col">
+                      {/* Header Section without Category Tag */}
+                      <div className="flex items-start mb-3">
+                        <div className="flex items-start gap-2 min-w-0">
+                          <h3 className={`
+                            text-base font-semibold leading-tight truncate
                             ${task.status === 'completed'
-                              ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                              : 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400'
+                              ? 'text-gray-500 dark:text-gray-400 line-through'
+                              : isOverdue
+                                ? 'text-red-800 dark:text-red-300'
+                                : 'text-gray-800 dark:text-gray-100'
                             }
-                            ${isOverdue && task.status !== 'completed' ? 'animate-pulse' : ''}
                           `}>
-                            {status.icon}
-                            <span>{status.label}</span>
+                            {task.name}
+                          </h3>
+                          {task.isAdminTask && (
+                            <div className="flex-shrink-0 p-0.5 mt-0.5">
+                              <Crown className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400" />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Description */}
+                      <p className={`
+                        text-sm leading-relaxed line-clamp-2 mb-4 flex-grow
+                        ${task.status === 'completed'
+                          ? 'text-gray-500 dark:text-gray-400'
+                          : isOverdue
+                            ? 'text-gray-700 dark:text-gray-300'
+                            : 'text-gray-600 dark:text-gray-300'
+                        }
+                      `}>
+                        {task.description}
+                      </p>
+
+                      {/* Footer Section */}
+                      <div className="flex items-center justify-between pt-2 border-t border-gray-100 dark:border-gray-700/50">
+                        {/* Due Date */}
+                        <div className="flex items-center gap-1.5">
+                          <Calendar className={`
+                            w-3.5 h-3.5
+                            ${isOverdue && !task.status 
+                              ? 'text-red-500 dark:text-red-400' 
+                              : 'text-gray-500 dark:text-gray-400'
+                            }`} 
+                          />
+                          <span className={`
+                            text-xs font-medium
+                            ${isOverdue && !task.status 
+                              ? 'text-red-500 dark:text-red-400' 
+                              : 'text-gray-500 dark:text-gray-400'
+                            }`
+                          }>
+                            Due: {format(dueDate, 'MMM d')}
                           </span>
-                        )}
+                        </div>
                         
-                        {/* Category Tag - Professional Design */}
-                        <span className={`
-                          inline-flex items-center gap-1.5
-                          px-2.5 py-0.5
-                          text-[10px] font-medium tracking-wide
-                          rounded-md border
-                          ${categoryInfo.color.replace('bg-', 'bg-opacity-75 bg-').replace('text-', 'text-opacity-90 text-')}
-                          transition-all duration-200
-                          shadow-sm backdrop-blur-sm
-                          border-opacity-30
-                          ${categoryInfo.color.includes('blue') ? 'border-blue-200 dark:border-blue-700' :
-                            categoryInfo.color.includes('purple') ? 'border-purple-200 dark:border-purple-700' :
-                            categoryInfo.color.includes('emerald') ? 'border-emerald-200 dark:border-emerald-700' :
-                            categoryInfo.color.includes('indigo') ? 'border-indigo-200 dark:border-indigo-700' :
-                            categoryInfo.color.includes('green') ? 'border-green-200 dark:border-green-700' :
-                            categoryInfo.color.includes('red') ? 'border-red-200 dark:border-red-700' :
-                            categoryInfo.color.includes('yellow') ? 'border-yellow-200 dark:border-yellow-700' :
-                            categoryInfo.color.includes('amber') ? 'border-amber-200 dark:border-amber-700' :
-                            categoryInfo.color.includes('sky') ? 'border-sky-200 dark:border-sky-700' :
-                            'border-gray-200 dark:border-gray-700'}
-                          hover:shadow-md group-hover:shadow-md
-                        `}>
-                          <div className="flex-shrink-0">
-                            {categoryInfo.icon}
-                          </div>
-                          <span className="capitalize whitespace-nowrap">
-                            {task.category.replace('-', ' ')}
+                        {/* Status Badge and Category Tag */}
+                        <div className="flex items-center gap-2">
+                          {/* Status Badge - only show for Completed or Overdue */}
+                          {(task.status === 'completed' || isOverdue) && (
+                            <span className={`
+                              inline-flex items-center gap-1
+                              px-2 py-0.5
+                              text-[10px] font-medium
+                              rounded-full
+                              ${task.status === 'completed'
+                                ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                                : 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400'
+                              }
+                              ${isOverdue && task.status !== 'completed' ? 'animate-pulse' : ''}
+                            `}>
+                              {status.icon}
+                              <span>{status.label}</span>
+                            </span>
+                          )}
+                          
+                          {/* Category Tag - Professional Design */}
+                          <span className={`
+                            inline-flex items-center gap-1.5
+                            px-2.5 py-0.5
+                            text-[10px] font-medium tracking-wide
+                            rounded-md border
+                            ${categoryInfo.color.replace('bg-', 'bg-opacity-75 bg-').replace('text-', 'text-opacity-90 text-')}
+                            transition-all duration-200
+                            shadow-sm backdrop-blur-sm
+                            border-opacity-30
+                            ${categoryInfo.color.includes('blue') ? 'border-blue-200 dark:border-blue-700' :
+                              categoryInfo.color.includes('purple') ? 'border-purple-200 dark:border-purple-700' :
+                              categoryInfo.color.includes('emerald') ? 'border-emerald-200 dark:border-emerald-700' :
+                              categoryInfo.color.includes('indigo') ? 'border-indigo-200 dark:border-indigo-700' :
+                              categoryInfo.color.includes('green') ? 'border-green-200 dark:border-green-700' :
+                              categoryInfo.color.includes('red') ? 'border-red-200 dark:border-red-700' :
+                              categoryInfo.color.includes('yellow') ? 'border-yellow-200 dark:border-yellow-700' :
+                              categoryInfo.color.includes('amber') ? 'border-amber-200 dark:border-amber-700' :
+                              categoryInfo.color.includes('sky') ? 'border-sky-200 dark:border-sky-700' :
+                              'border-gray-200 dark:border-gray-700'}
+                            hover:shadow-md group-hover:shadow-md
+                          `}>
+                            <div className="flex-shrink-0">
+                              {categoryInfo.icon}
+                            </div>
+                            <span className="capitalize whitespace-nowrap">
+                              {task.category.replace('-', ' ')}
+                            </span>
                           </span>
-                        </span>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200/80 dark:border-gray-700/80 mt-4">
-            <div className="w-16 h-16 mx-auto mb-4 bg-gray-50 dark:bg-gray-700 rounded-full flex items-center justify-center">
-              <Calendar className="w-8 h-8 text-gray-400 dark:text-gray-500" />
+                );
+              })}
             </div>
-            <p className="text-lg text-gray-900 dark:text-gray-100 font-medium">No tasks for {format(selectedDate, 'MMMM d')}</p>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-              {isSameDay(selectedDate, new Date()) 
-                ? "You're all caught up for today!" 
-                : "Nothing scheduled for this day"}
-            </p>
+          ) : (
+            <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200/80 dark:border-gray-700/80 mt-4">
+              <div className="w-16 h-16 mx-auto mb-4 bg-gray-50 dark:bg-gray-700 rounded-full flex items-center justify-center">
+                <Calendar className="w-8 h-8 text-gray-400 dark:text-gray-500" />
+              </div>
+              <p className="text-lg text-gray-900 dark:text-gray-100 font-medium">No tasks for {format(selectedDate, 'MMMM d')}</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                {isSameDay(selectedDate, new Date()) 
+                  ? "You're all caught up for today!" 
+                  : "Nothing scheduled for this day"}
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Task Details Modal */}
+        {selectedTask && (
+          <TaskDetailsPopup
+            task={selectedTask}
+            onClose={() => setSelectedTask(null)}
+            onStatusUpdate={handleStatusUpdate}
+            isUpdating={isUpdating}
+            error={operationError}
+          />
+        )}
+
+        {/* Monthly Calendar */}
+        {isMonthlyCalendarOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm">
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl p-4 max-w-md w-full mx-4">
+              <MonthlyCalendar 
+                selectedDate={selectedDate} 
+                onDateSelect={(date) => {
+                  setSelectedDate(date);
+                  setIsMonthlyCalendarOpen(false);
+                }}
+                onClose={() => setIsMonthlyCalendarOpen(false)}
+              />
+            </div>
           </div>
         )}
       </div>
-
-      {/* Task Details Modal */}
-      {selectedTask && (
-        <TaskDetailsPopup
-          task={selectedTask}
-          onClose={() => setSelectedTask(null)}
-          onStatusUpdate={handleStatusUpdate}
-          isUpdating={isUpdating}
-        />
-      )}
-
-      {/* Monthly Calendar */}
-      <MonthlyCalendar
-        isOpen={isMonthlyCalendarOpen}
-        onClose={() => setIsMonthlyCalendarOpen(false)}
-        selectedDate={selectedDate}
-        onSelectDate={(date) => {
-          // Set selected date directly with debugging
-          console.log('Date from calendar before setting:', date);
-          
-          // Ensure the date is valid
-          if (!(date instanceof Date) || isNaN(date.getTime())) {
-            console.error('Invalid date received from calendar:', date);
-            return;
-          }
-          
-          // Clear any selected task to prevent auto-selection
-          setSelectedTask(null);
-          
-          // Set the flag to prevent task selection for a brief period
-          setPreventTaskSelection(true);
-          // Reset the flag after a delay
-          setTimeout(() => {
-            setPreventTaskSelection(false);
-          }, 1000); // Prevent selection for 1 second
-          
-          setSelectedDate(date);
-          setIsMonthlyCalendarOpen(false);
-          
-          // Update URL parameter efficiently
-          try {
-            const params = new URLSearchParams(window.location.search);
-            params.set('selectedDate', formatDate(date));
-            const newUrl = `${window.location.pathname}?${params.toString()}`;
-            window.history.pushState({ path: newUrl }, '', newUrl);
-          } catch (error) {
-            console.error('Error setting date parameter:', error);
-          }
-        }}
-        tasks={tasks}
-      />
-    </div>
+    </PullToRefresh>
   );
 }

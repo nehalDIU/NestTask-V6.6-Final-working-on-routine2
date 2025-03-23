@@ -3,6 +3,7 @@ import { useState, useCallback } from 'react';
 interface UsePullToRefreshProps {
   onRefresh: () => Promise<any>;
   disabled?: boolean;
+  facebookStyle?: boolean;
 }
 
 interface UsePullToRefreshReturn {
@@ -11,6 +12,7 @@ interface UsePullToRefreshReturn {
   refreshProps: {
     onRefresh: () => Promise<void>;
     disabled: boolean;
+    facebookStyle: boolean;
   };
 }
 
@@ -18,11 +20,13 @@ interface UsePullToRefreshReturn {
  * Custom hook to handle pull-to-refresh functionality
  * @param onRefresh Function to call when a refresh is triggered
  * @param disabled Whether the pull-to-refresh functionality is disabled
+ * @param facebookStyle Whether to use Facebook-style animations (default: true)
  * @returns Object containing refresh state and props to pass to PullToRefresh component
  */
 export function usePullToRefresh({
   onRefresh,
   disabled = false,
+  facebookStyle = true,
 }: UsePullToRefreshProps): UsePullToRefreshReturn {
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -36,9 +40,12 @@ export function usePullToRefresh({
     } catch (error) {
       console.error('Error during refresh:', error);
     } finally {
-      setIsRefreshing(false);
+      // Add a small delay for Facebook-style
+      setTimeout(() => {
+        setIsRefreshing(false);
+      }, facebookStyle ? 300 : 0);
     }
-  }, [onRefresh, isRefreshing, disabled]);
+  }, [onRefresh, isRefreshing, disabled, facebookStyle]);
 
   return {
     isRefreshing,
@@ -46,6 +53,7 @@ export function usePullToRefresh({
     refreshProps: {
       onRefresh: startRefresh,
       disabled,
+      facebookStyle,
     },
   };
 } 

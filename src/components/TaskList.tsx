@@ -26,18 +26,36 @@ import { parseLinks } from '../utils/linkParser';
 import { useState, useMemo } from 'react';
 import { TaskDetailsPopup } from './task/TaskDetailsPopup';
 import { useOfflineStatus } from '../hooks/useOfflineStatus';
+import { PullToRefresh } from './ui/PullToRefresh';
+import { usePullToRefresh } from '../hooks/usePullToRefresh';
 
 interface TaskListProps {
   tasks: Task[];
   onDeleteTask?: (taskId: string) => void;
   showDeleteButton?: boolean;
+  onRefresh?: () => Promise<void>;
 }
 
-export function TaskList({ tasks, onDeleteTask, showDeleteButton = false }: TaskListProps) {
+export function TaskList({ 
+  tasks, 
+  onDeleteTask, 
+  showDeleteButton = false, 
+  onRefresh 
+}: TaskListProps) {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [deletingTaskId, setDeletingTaskId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const isOffline = useOfflineStatus();
+
+  // Initialize pull-to-refresh hook
+  const { refreshProps, isRefreshing } = usePullToRefresh({
+    onRefresh: async () => {
+      if (onRefresh) {
+        await onRefresh();
+      }
+    },
+    disabled: !onRefresh || isOffline // Disable pull-to-refresh when offline or onRefresh not provided
+  });
 
   // Sort tasks to move completed tasks to the bottom and handle overdue tasks
   const sortedTasks = [...tasks].sort((a, b) => {
@@ -110,7 +128,22 @@ export function TaskList({ tasks, onDeleteTask, showDeleteButton = false }: Task
   };
 
   if (sortedTasks.length === 0) {
-    return (
+    // Wrap empty state in PullToRefresh if onRefresh provided
+    return onRefresh ? (
+      <PullToRefresh {...refreshProps}>
+        <div className="text-center py-8 sm:py-12 animate-fade-in">
+          <img
+            src="https://images.unsplash.com/photo-1496115965489-21be7e6e59a0?auto=format&fit=crop&q=80&w=400"
+            alt="Empty tasks"
+            className="w-32 h-32 sm:w-48 sm:h-48 object-cover rounded-2xl mx-auto mb-4 opacity-50 shadow-lg"
+          />
+          <p className="text-gray-500 dark:text-gray-400 text-base sm:text-lg font-medium">No tasks found in this category</p>
+          <p className="text-gray-400 dark:text-gray-500 mt-2 text-sm sm:text-base">
+            {isRefreshing ? 'Refreshing...' : 'Pull down to refresh or add some new tasks!'}
+          </p>
+        </div>
+      </PullToRefresh>
+    ) : (
       <div className="text-center py-8 sm:py-12 animate-fade-in">
         <img
           src="https://images.unsplash.com/photo-1496115965489-21be7e6e59a0?auto=format&fit=crop&q=80&w=400"
@@ -123,12 +156,19 @@ export function TaskList({ tasks, onDeleteTask, showDeleteButton = false }: Task
     );
   }
 
-  return (
+  const taskListContent = (
     <div className="space-y-4">
       {isOffline && (
         <div className="mb-4 p-3 bg-blue-50 rounded-lg flex items-center gap-2 text-sm text-blue-700 border border-blue-100">
           <WifiOff className="h-4 w-4 text-blue-500" />
           <p>You're offline. Showing cached tasks.</p>
+        </div>
+      )}
+      
+      {isRefreshing && !isOffline && (
+        <div className="mb-4 p-3 bg-green-50 rounded-lg flex items-center gap-2 text-sm text-green-700 border border-green-100">
+          <Clock className="h-4 w-4 text-green-500" />
+          <p>Refreshing tasks...</p>
         </div>
       )}
       
@@ -303,4 +343,11 @@ export function TaskList({ tasks, onDeleteTask, showDeleteButton = false }: Task
       )}
     </div>
   );
+
+  // Wrap with PullToRefresh if onRefresh is provided
+  return onRefresh ? (
+    <PullToRefresh {...refreshProps}>
+      {taskListContent}
+    </PullToRefresh>
+  ) : taskListContent;
 }

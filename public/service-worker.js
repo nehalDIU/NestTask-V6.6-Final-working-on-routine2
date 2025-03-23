@@ -1,4 +1,4 @@
-const CACHE_NAME = 'nesttask-v3';
+const CACHE_NAME = 'nesttask-v5';
 const OFFLINE_URL = '/offline.html';
 
 // Assets to cache on install
@@ -50,24 +50,55 @@ self.addEventListener('install', (event) => {
   );
 });
 
+// Handle messages to skip waiting and immediately activate new service worker
+self.addEventListener('message', (event) => {
+  console.log('[ServiceWorker] Received message:', event.data);
+  
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    console.log('[ServiceWorker] Received SKIP_WAITING message, activating new version immediately');
+    
+    // Skip waiting and activate immediately
+    self.skipWaiting()
+      .then(() => console.log('[ServiceWorker] Successfully skipped waiting'))
+      .catch(error => console.error('[ServiceWorker] Error skipping waiting:', error));
+  }
+});
+
 // Activate event - clean up old caches
 self.addEventListener('activate', (event) => {
+  console.log('[ServiceWorker] Activate event triggered');
+  
   event.waitUntil(
-    caches.keys()
-      .then((cacheNames) => {
-        return Promise.all(
-          cacheNames
-            .filter((cacheName) => cacheName !== CACHE_NAME)
-            .map((cacheName) => {
-              console.log('[ServiceWorker] Deleting old cache:', cacheName);
-              return caches.delete(cacheName);
-            })
-        );
-      })
-      .then(() => {
-        console.log('[ServiceWorker] Claiming clients');
-        return self.clients.claim();
-      })
+    Promise.all([
+      // Delete old caches
+      caches.keys()
+        .then((cacheNames) => {
+          return Promise.all(
+            cacheNames
+              .filter((cacheName) => cacheName !== CACHE_NAME)
+              .map((cacheName) => {
+                console.log('[ServiceWorker] Deleting old cache:', cacheName);
+                return caches.delete(cacheName);
+              })
+          );
+        }),
+      
+      // Claim all clients immediately to ensure update takes effect
+      self.clients.claim()
+        .then(() => {
+          console.log('[ServiceWorker] Claimed all clients');
+          
+          // Notify all clients that the service worker has been updated
+          return self.clients.matchAll()
+            .then(clients => {
+              clients.forEach(client => {
+                client.postMessage({ type: 'SW_ACTIVATED', version: CACHE_NAME });
+              });
+            });
+        })
+    ])
+    .then(() => console.log('[ServiceWorker] Activation complete'))
+    .catch(error => console.error('[ServiceWorker] Activation error:', error))
   );
 });
 

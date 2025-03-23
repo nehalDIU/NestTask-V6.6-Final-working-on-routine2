@@ -240,7 +240,8 @@ window.addEventListener('load', () => {
     // Initialize PWA features and enhancements when app is fully loaded
     Promise.all([
       import('./utils/pwa').then(({ initPWA }) => initPWA()),
-      import('./utils/pwaEnhancements').then(({ initPWAEnhancements }) => initPWAEnhancements())
+      import('./utils/pwaEnhancements').then(({ initPWAEnhancements }) => initPWAEnhancements()),
+      import('./utils/serviceWorkerUtils').then(({ initServiceWorkerUpdates }) => initServiceWorkerUpdates())
     ]).then(([pwaResult, enhancementsResult]) => {
       if (pwaResult && enhancementsResult) {
         console.log('PWA features and enhancements initialized successfully');
@@ -251,9 +252,15 @@ window.addEventListener('load', () => {
     if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
       window.addEventListener('sw-update-available', (event) => {
         console.log('Service worker update available!');
-        // Show update notification only once per session
-        if (!(window as any).updateNotificationShown) {
-          (window as any).updateNotificationShown = true;
+        
+        // Check if notification was shown in this session
+        const lastNotificationTime = sessionStorage.getItem('updateNotificationShown');
+        const currentTime = Date.now();
+        
+        // Show notification if not shown yet or it's been more than 6 hours
+        if (!lastNotificationTime || (currentTime - parseInt(lastNotificationTime)) > 6 * 60 * 60 * 1000) {
+          // Update the timestamp
+          sessionStorage.setItem('updateNotificationShown', currentTime.toString());
           
           // Show update notification after a delay
           setTimeout(() => {
@@ -263,10 +270,44 @@ window.addEventListener('load', () => {
                 detail: { 
                   message: 'New version available! Refresh to update.',
                   type: 'info',
-                  duration: 10000,
+                  duration: 30000, // Longer duration to give user time to see it
                   action: {
                     label: 'Refresh',
-                    onClick: () => window.location.reload()
+                    onClick: async () => {
+                      try {
+                        // Flag that we're intentionally reloading to apply update
+                        (document as any).isReloading = true;
+                        
+                        // Get the service worker registration from the event
+                        const registration = (event as CustomEvent).detail?.registration;
+                        
+                        // If we have direct access to the registration, use it
+                        if (registration && registration.waiting) {
+                          console.log('Sending skip waiting message to service worker');
+                          // Tell the service worker to skip waiting
+                          registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+                          
+                          // The service worker will take control and reload will happen
+                          // in the controllerchange event (already handled in ServiceWorkerUpdateNotification)
+                          return;
+                        }
+                        
+                        // Fallback: try to get registrations
+                        const registrations = await navigator.serviceWorker.getRegistrations();
+                        if (registrations.length > 0 && registrations[0].waiting) {
+                          console.log('Sending skip waiting message via registrations');
+                          registrations[0].waiting.postMessage({ type: 'SKIP_WAITING' });
+                          return;
+                        }
+                        
+                        // If all else fails, just reload
+                        console.log('No waiting service worker found, refreshing page directly');
+                        window.location.reload();
+                      } catch (error) {
+                        console.error('Error during refresh:', error);
+                        window.location.reload(); // Fallback
+                      }
+                    }
                   }
                 } 
               }));

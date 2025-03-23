@@ -503,6 +503,7 @@ export default function App() {
               <TaskList
                 tasks={getFilteredTasks()}
                 showDeleteButton={false}
+                onRefresh={refreshTasks}
               />
             </div>
           </div>

@@ -143,10 +143,20 @@ function setupUpdateHandler(registration: ServiceWorkerRegistration) {
         if (newWorker.scriptURL !== registration.active?.scriptURL) {
           console.log('New version available! Refresh to update.');
           
-          // Dispatch event for the app to show a refresh notification
-          window.dispatchEvent(new CustomEvent('sw-update-available', {
-            detail: { registration }
-          }));
+          // Check if we've recently shown a notification
+          const lastNotified = localStorage.getItem('lastUpdateNotificationTime');
+          const currentTime = Date.now();
+          
+          // Only notify if we haven't notified recently (within the last hour)
+          if (!lastNotified || (currentTime - parseInt(lastNotified)) > 60 * 60 * 1000) {
+            // Update the last notification time
+            localStorage.setItem('lastUpdateNotificationTime', currentTime.toString());
+            
+            // Dispatch event for the app to show a refresh notification
+            window.dispatchEvent(new CustomEvent('sw-update-available', {
+              detail: { registration }
+            }));
+          }
         }
       }
     });

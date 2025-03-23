@@ -23,6 +23,7 @@ export function preventPinchZoom() {
 
 /**
  * Prevents pull-to-refresh behavior on mobile devices
+ * except for elements with the class 'pull-to-refresh-container'
  */
 export function preventPullToRefresh() {
   let startY: number;
@@ -32,6 +33,14 @@ export function preventPullToRefresh() {
   }, { passive: true });
   
   document.addEventListener('touchmove', (e) => {
+    // Skip prevention if the event originated from our pull-to-refresh component
+    if (e.target instanceof Element) {
+      const pullToRefreshContainer = e.target.closest('.pull-to-refresh-container');
+      if (pullToRefreshContainer) {
+        return; // Allow the pull-to-refresh container to handle the event
+      }
+    }
+    
     const y = e.touches[0].pageY;
     // Prevent overscroll when already at the top
     if (document.scrollingElement!.scrollTop === 0 && y > startY) {

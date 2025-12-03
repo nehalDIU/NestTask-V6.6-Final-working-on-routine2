@@ -1,0 +1,212 @@
+<?php
+
+    $con = mysqli_connect("localhost", "root", "", "test");
+
+?>
+
+
+<?php
+
+    include 'connection.php';
+
+    $un = $_POST['uname'];
+    $posts = $_POST['posts'];
+
+    $sql = "INSERT INTO lastlab(username, posts) VALUES('$un', '$posts')";
+
+    $run = mysqli_query($con, $sql);
+
+    if(!$run){
+        echo "submission failed!";
+    } else{
+        header("location: display.php");
+    }
+
+?>
+
+
+<?php
+    include 'connection.php';
+
+    $sql = "SELECT * FROM lastlab";
+    $run = mysqli_query($con, $sql);
+
+    if(mysqli_num_rows($run) > 0){
+
+?>
+
+
+//display.php
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <table>
+            <tr>
+                <th>username</th>
+                <th>posts</th>
+                <th>Action</th>
+            </tr>
+            <?php while($row = mysqli_fetch_assoc($run)){ ?>
+            <tr>
+                <td><?= $row['username'] ?></td>
+                <td><?= $row['posts'] ?></td>
+                <td>
+                    <a style="color:blue" href="update.php?id=<?= $row['id'] ?>">Update</a> |
+                    <a style="color:blue" href="delete.php?id=<?= $row['id'] ?>">Delete</a>
+                </td>
+            </tr>
+            <?php } ?>
+        </table>
+        <?php } ?>
+    </div>
+</body>
+</html>
+
+insurt.php
+<?php
+
+    include 'connection.php';
+
+    $un = $_POST['uname'];
+    $posts = $_POST['posts'];
+    $id = $_POST['id'];
+
+    $sql = "UPDATE lastlab SET username = '$un', posts='$posts' 
+                WHERE id='$id'";
+
+    $run = mysqli_query($con, $sql);
+
+    if(!$run){
+        echo "submission failed!";
+    } else{
+        header("location: display.php");
+    }
+
+?>
+
+delate.php
+<?php
+
+    include 'connection.php';
+
+    $id = $_GET['id'];
+
+    $sql = "DELETE FROM lastlab WHERE id = '$id'";
+    
+    $run = mysqli_query($con, $sql);
+
+    if(!$run){
+        echo 'delete operation failed!';
+    } else{
+        header("location: display.php");
+    }
+
+?>
+
+
+index.php
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <?php include 'nav.html' ?>
+    <div class="container">
+        <form action="code.php" method="post" id="form">
+            <input type="text" name="uname" id="uname" placeholder="enter your username" size="30">
+            <br><br>
+            <textarea name="posts" id="posts" rows="5" cols="36" placeholder="what's on your mind?"></textarea>
+            <br><br>
+            <input type="submit" value="POST">
+        </form>
+    </div>
+</body>
+</html>
+
+
+//style.css
+
+*{
+    margin: 0;
+    font-family: Cambria, Cochin, Georgia, Times, 'Times New Roman', serif;
+}
+
+.container{
+    margin: 10px;
+    padding: 10px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+}
+
+.card{
+    min-width: 300px;
+    margin: 10px;
+    padding: 10px;
+    border-radius: 10px;
+    box-shadow: 3px 3px 3px 3px rgb(255, 206, 206);
+}
+
+#form{
+    padding: 10px;
+    border-radius: 10px;
+    box-shadow: 3px 3px 3px 3px rgb(255, 206, 206);
+}
+
+table, tr, th, td{
+    border: 1px solid rgb(255, 206, 206);
+    border-collapse: collapse;
+    padding: 5px;
+}
+
+input, textarea{
+    border: 1px solid rgb(255, 206, 206);
+    border-radius: 10px;
+    padding: 5px;
+}
+
+
+display1.php
+<?php
+    include 'connection.php';
+
+    $sql = "SELECT * FROM lastlab";
+    $run = mysqli_query($con, $sql);
+
+    if(mysqli_num_rows($run) > 0){
+
+?>
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <?php while($row = mysqli_fetch_assoc($run)){ ?>
+            <div class="card">
+                <h4><?= $row['username'] ?></h4>
+                <p><?= $row['posts'] ?></p> <br>
+                <a style="color:blue" href="update.php?id=<?= $row['id'] ?>">Update</a> |
+                    <a style="color:blue" href="delete.php?id=<?= $row['id'] ?>">Delete</a>
+            </div>
+        <?php } } ?>
+    </div>
+</body>
+</html>
